@@ -1359,7 +1359,7 @@ STATUS initTrackData(PGstKvsPlugin pGstKvsPlugin)
             mediaType = gst_structure_get_name(gst_caps_get_structure(caps, 0));
             if (STRNCMP(mediaType, GSTREAMER_MEDIA_TYPE_AAC, MAX_GSTREAMER_MEDIA_TYPE_LEN) == 0) {
                 // default codec id is for aac audio.
-                audioContentType = g_strdup(AUDIO_AAC_CONTENT_TYPE);
+                audioContentType = g_strdup(AUDIO_MULAW_CONTENT_TYPE);
             } else if (STRNCMP(mediaType, GSTREAMER_MEDIA_TYPE_ALAW, MAX_GSTREAMER_MEDIA_TYPE_LEN) == 0) {
                 g_free(pGstKvsPlugin->audioCodecId);
                 pGstKvsPlugin->audioCodecId = g_strdup(DEFAULT_AUDIO_CODEC_ID_PCM);
