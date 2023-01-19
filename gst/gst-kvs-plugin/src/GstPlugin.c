@@ -911,7 +911,7 @@ GST_DEBUG_CATEGORY(kvs_debug);
 
 static gboolean plugin_init(GstPlugin* plugin)
 {
-    if (!gst_element_register(plugin, "kvsplugin", GST_RANK_PRIMARY + 10, GST_TYPE_KVS_PLUGIN)) {
+    if (!gst_element_register(plugin, "kvswebrtcplugin", GST_RANK_PRIMARY + 10, GST_TYPE_KVS_PLUGIN)) {
         return FALSE;
     }
 
@@ -1015,6 +1015,6 @@ CleanUp:
     return retStatus;
 }
 
-#define PACKAGE "kvspluginpackage"
+#define PACKAGE "kvswebrtcpluginpackage"
 GST_PLUGIN_DEFINE(GST_VERSION_MAJOR, GST_VERSION_MINOR, kvsplugin, "GStreamer AWS KVS plugin", plugin_init, "1.0", "Proprietary", "GStreamer",
                   "http://gstreamer.net/")
