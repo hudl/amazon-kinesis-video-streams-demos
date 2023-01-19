@@ -17,8 +17,8 @@
 #define DEFAULT_ADAPT_CPD_NALS                 FALSE
 #define DEFAULT_ADAPT_FRAME_NALS               FALSE
 #define DEFAULT_DISABLE_BUFFER_CLIPPING        FALSE
-#define DEFAULT_STREAM_FRAMERATE               25
-#define DEFAULT_STREAM_FRAMERATE_HIGH_DENSITY  100
+// #define DEFAULT_STREAM_FRAMERATE               25
+// #define DEFAULT_STREAM_FRAMERATE_HIGH_DENSITY  100
 #define DEFAULT_AVG_BANDWIDTH_BPS              (4 * 1024 * 1024)
 #define DEFAULT_BUFFER_DURATION_SECONDS        120
 #define DEFAULT_REPLAY_DURATION_SECONDS        MAX_UINT32
@@ -62,10 +62,10 @@ typedef enum {
 
 #define IS_AVCC_HEVC_CPD_NAL_FORMAT(f) (((f) == ELEMENTARY_STREAM_NAL_FORMAT_AVCC) || ((f) == ELEMENTARY_STREAM_NAL_FORMAT_HEVC))
 
-STATUS traverseDirectoryPemFileScan(UINT64, DIR_ENTRY_TYPES, PCHAR, PCHAR);
-STATUS lookForSslCert(PGstKvsPlugin);
-STATUS initKinesisVideoStream(PGstKvsPlugin);
-STATUS initKinesisVideoProducer(PGstKvsPlugin);
+// STATUS traverseDirectoryPemFileScan(UINT64, DIR_ENTRY_TYPES, PCHAR, PCHAR);
+// STATUS lookForSslCert(PGstKvsPlugin);
+// STATUS initKinesisVideoStream(PGstKvsPlugin);
+// STATUS initKinesisVideoProducer(PGstKvsPlugin);
 STATUS initTrackData(PGstKvsPlugin);
 STATUS identifyFrameNalFormat(PBYTE, UINT32, ELEMENTARY_STREAM_NAL_FORMAT*);
 STATUS identifyCpdNalFormat(PBYTE, UINT32, ELEMENTARY_STREAM_NAL_FORMAT*);

@@ -52,39 +52,39 @@ typedef struct __PendingMessageQueue* PPendingMessageQueue;
 
 typedef enum {
     PROP_0,
-    PROP_STREAM_NAME,
+    // PROP_STREAM_NAME,
     PROP_CHANNEL_NAME,
-    PROP_RETENTION_PERIOD,
+    // PROP_RETENTION_PERIOD,
     PROP_STREAMING_TYPE,
     PROP_CONTENT_TYPE,
-    PROP_MAX_LATENCY,
-    PROP_FRAGMENT_DURATION,
-    PROP_TIMECODE_SCALE,
-    PROP_KEY_FRAME_FRAGMENTATION,
-    PROP_FRAME_TIMECODES,
-    PROP_ABSOLUTE_FRAGMENT_TIMES,
-    PROP_FRAGMENT_ACKS,
-    PROP_RESTART_ON_ERROR,
-    PROP_RECALCULATE_METRICS,
-    PROP_FRAMERATE,
-    PROP_AVG_BANDWIDTH_BPS,
-    PROP_BUFFER_DURATION,
-    PROP_REPLAY_DURATION,
-    PROP_CONNECTION_STALENESS,
+    // PROP_MAX_LATENCY,
+    // PROP_FRAGMENT_DURATION,
+    // PROP_TIMECODE_SCALE,
+    // PROP_KEY_FRAME_FRAGMENTATION,
+    // PROP_FRAME_TIMECODES,
+    // PROP_ABSOLUTE_FRAGMENT_TIMES,
+    // PROP_FRAGMENT_ACKS,
+    // PROP_RESTART_ON_ERROR,
+    // PROP_RECALCULATE_METRICS,
+    // PROP_FRAMERATE,
+    // PROP_AVG_BANDWIDTH_BPS,
+    // PROP_BUFFER_DURATION,
+    // PROP_REPLAY_DURATION,
+    // PROP_CONNECTION_STALENESS,
     PROP_CODEC_ID,
     PROP_ACCESS_KEY,
     PROP_SECRET_KEY,
     PROP_AWS_REGION,
-    PROP_ROTATION_PERIOD,
+    // PROP_ROTATION_PERIOD,
     PROP_LOG_LEVEL,
-    PROP_STORAGE_SIZE,
-    PROP_CREDENTIAL_FILE_PATH,
+    // PROP_STORAGE_SIZE,
+    // PROP_CREDENTIAL_FILE_PATH,
     PROP_IOT_CERTIFICATE,
-    PROP_STREAM_TAGS,
-    PROP_FILE_START_TIME,
+    // PROP_STREAM_TAGS,
+    // PROP_FILE_START_TIME,
     PROP_DISABLE_BUFFER_CLIPPING,
-    PROP_STREAM_CREATE_TIMEOUT,
-    PROP_STREAM_STOP_TIMEOUT,
+    // PROP_STREAM_CREATE_TIMEOUT,
+    // PROP_STREAM_STOP_TIMEOUT,
     PROP_ADAPT_CPD_NALS_TO_AVC,
     PROP_ADAPT_FRAME_NALS_TO_AVC,
     PROP_FILE_LOG_PATH,
@@ -158,13 +158,13 @@ typedef STATUS (*freeCredentialProviderFunc)(PAwsCredentialProvider*);
 
 typedef struct __KvsContext KvsContext;
 struct __KvsContext {
-    PDeviceInfo pDeviceInfo;
-    PStreamInfo pStreamInfo;
+    // PDeviceInfo pDeviceInfo;
+    // PStreamInfo pStreamInfo;
     PAwsCredentialProvider pCredentialProvider;
-    PClientCallbacks pClientCallbacks;
-    PStreamCallbacks pStreamCallbacks;
-    CLIENT_HANDLE clientHandle;
-    STREAM_HANDLE streamHandle;
+    // PClientCallbacks pClientCallbacks;
+    // PStreamCallbacks pStreamCallbacks;
+    // CLIENT_HANDLE clientHandle;
+    // STREAM_HANDLE streamHandle;
     TIMER_QUEUE_HANDLE timerQueueHandle;
     SIGNALING_CLIENT_HANDLE signalingHandle;
     freeCredentialProviderFunc freeCredentialProviderFn;
@@ -176,29 +176,29 @@ typedef struct __KvsContext* PKvsContext;
 
 typedef struct __GstParams GstParams;
 struct __GstParams {
-    gchar* streamName;
+    // gchar* streamName;
     gchar* channelName;
-    guint retentionPeriodInHours;
-    gchar* kmsKeyId;
+    // guint retentionPeriodInHours;
+    // gchar* kmsKeyId;
     STREAMING_TYPE streamingType;
     gchar* contentType;
     gchar* audioContentType;
     gchar* videoContentType;
-    guint maxLatencyInSeconds;
-    guint fragmentDurationInMillis;
-    guint timeCodeScaleInMillis;
-    gboolean keyFrameFragmentation;
-    gboolean frameTimecodes;
-    gboolean absoluteFragmentTimecodes;
-    gboolean fragmentAcks;
-    gboolean restartOnErrors;
-    gboolean recalculateMetrics;
+    // guint maxLatencyInSeconds;
+    // guint fragmentDurationInMillis;
+    // guint timeCodeScaleInMillis;
+    // gboolean keyFrameFragmentation;
+    // gboolean frameTimecodes;
+    // gboolean absoluteFragmentTimecodes;
+    // gboolean fragmentAcks;
+    // gboolean restartOnErrors;
+    // gboolean recalculateMetrics;
     gboolean disableBufferClipping;
-    guint frameRate;
-    guint avgBandwidthBps;
-    guint bufferDurationInSeconds;
-    guint replayDurationInSeconds;
-    guint connectionStalenessInSeconds;
+    // guint frameRate;
+    // guint avgBandwidthBps;
+    // guint bufferDurationInSeconds;
+    // guint replayDurationInSeconds;
+    // guint connectionStalenessInSeconds;
     gchar* codecId;
     gchar* accessKey;
     gchar* secretKey;
@@ -206,18 +206,18 @@ struct __GstParams {
     guint rotationPeriodInSeconds;
     guint logLevel;
     gchar* fileLogPath;
-    guint storageSizeInBytes;
-    gchar* credentialFilePath;
+    // guint storageSizeInBytes;
+    // gchar* credentialFilePath;
     GstStructure* iotCertificate;
-    GstStructure* streamTags;
-    guint64 fileStartTime;
-    guint streamCreateTimeoutInSeconds;
-    guint streamStopTimeoutInSeconds;
+    // GstStructure* streamTags;
+    // guint64 fileStartTime;
+    // guint streamCreateTimeoutInSeconds;
+    // guint streamStopTimeoutInSeconds;
     gboolean adaptCpdNals;
     gboolean adaptFrameNals;
     gboolean trickleIce;
     WEBRTC_CONNECTION_MODE connectionMode;
-    gboolean enableStreaming;
+    // gboolean enableStreaming;
     gboolean webRtcConnect;
 };
 typedef struct __GstParams* PGstParams;
@@ -284,8 +284,8 @@ struct __GstKvsPlugin {
     volatile ATOMIC_BOOL terminate;
     volatile ATOMIC_BOOL recreateSignalingClient;
     volatile ATOMIC_BOOL signalingConnected;
-    volatile ATOMIC_BOOL streamStopped;
-    volatile ATOMIC_BOOL enableStreaming;
+    // volatile ATOMIC_BOOL streamStopped;
+    // volatile ATOMIC_BOOL enableStreaming;
     volatile ATOMIC_BOOL connectWebRtc;
 
     CHAR caCertPath[MAX_PATH_LEN + 1];
@@ -331,7 +331,7 @@ struct __GstKvsPlugin {
     guint numAudioStreams;
     guint numVideoStreams;
 
-    STATUS streamStatus;
+    // STATUS streamStatus;
 
     ELEMENTARY_STREAM_NAL_FORMAT detectedCpdFormat;
 

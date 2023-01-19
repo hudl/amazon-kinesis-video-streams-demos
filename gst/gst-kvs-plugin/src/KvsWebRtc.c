@@ -3,6 +3,7 @@
 
 STATUS signalingClientStateChangedFn(UINT64 customData, SIGNALING_CLIENT_STATE state)
 {
+    DLOGD("signalingClientStateChangedFn");
     UNUSED_PARAM(customData);
     STATUS retStatus = STATUS_SUCCESS;
     PCHAR pStateStr;
@@ -17,6 +18,7 @@ STATUS signalingClientStateChangedFn(UINT64 customData, SIGNALING_CLIENT_STATE s
 
 STATUS signalingClientErrorFn(UINT64 customData, STATUS status, PCHAR msg, UINT32 msgLen)
 {
+    DLOGD("signalingClientErrorFn");
     PGstKvsPlugin pGstKvsPlugin = (PGstKvsPlugin) customData;
 
     DLOGW("Signaling client generated an error 0x%08x - '%.*s'", status, msgLen, msg);
@@ -31,6 +33,7 @@ STATUS signalingClientErrorFn(UINT64 customData, STATUS status, PCHAR msg, UINT3
 
 VOID onDataChannelMessage(UINT64 customData, PRtcDataChannel pDataChannel, BOOL isBinary, PBYTE pMessage, UINT32 pMessageLen)
 {
+    DLOGD("onDataChannelMessage");
     UNUSED_PARAM(customData);
     UNUSED_PARAM(pDataChannel);
     if (isBinary) {
@@ -48,6 +51,7 @@ VOID onDataChannel(UINT64 customData, PRtcDataChannel pRtcDataChannel)
 
 VOID onConnectionStateChange(UINT64 customData, RTC_PEER_CONNECTION_STATE newState)
 {
+    DLOGD("onConnectionStateChange");
     STATUS retStatus = STATUS_SUCCESS;
     PWebRtcStreamingSession pStreamingSession = (PWebRtcStreamingSession) customData;
 
@@ -81,6 +85,7 @@ CleanUp:
 
 STATUS signalingClientMessageReceivedFn(UINT64 customData, PReceivedSignalingMessage pReceivedSignalingMessage)
 {
+    DLOGD("signalingClientMessageReceivedFn");
     STATUS retStatus = STATUS_SUCCESS;
     PGstKvsPlugin pGstKvsPlugin = (PGstKvsPlugin) customData;
     BOOL peerConnectionFound = FALSE;
@@ -93,13 +98,25 @@ STATUS signalingClientMessageReceivedFn(UINT64 customData, PReceivedSignalingMes
 
     CHK(pGstKvsPlugin != NULL, STATUS_NULL_ARG);
 
+    DLOGD("pGstKvsPlugin->sessionLock");
     MUTEX_LOCK(pGstKvsPlugin->sessionLock);
     locked = TRUE;
-
+    // if (IS_VALID_MUTEX_VALUE(pGstKvsPlugin->sessionLock)) {
+    //     DLOGD("valid mutex lock");
+    //     if (!locked)
+    //     {
+    //         DLOGD("unlocked");
+    //         MUTEX_LOCK(pGstKvsPlugin->sessionLock);
+    //     }
+    //     DLOGD("locked");
+    //     locked = TRUE;
+    // }
     clientIdHash = COMPUTE_CRC32((PBYTE) pReceivedSignalingMessage->signalingMessage.peerClientId,
                                  (UINT32) STRLEN(pReceivedSignalingMessage->signalingMessage.peerClientId));
+    DLOGD("hashTableContains");
     CHK_STATUS(hashTableContains(pGstKvsPlugin->pRtcPeerConnectionForRemoteClient, clientIdHash, &peerConnectionFound));
     if (peerConnectionFound) {
+        DLOGD("hashTableGet");
         CHK_STATUS(hashTableGet(pGstKvsPlugin->pRtcPeerConnectionForRemoteClient, clientIdHash, &hashValue));
         pStreamingSession = (PWebRtcStreamingSession) hashValue;
     }
@@ -107,6 +124,7 @@ STATUS signalingClientMessageReceivedFn(UINT64 customData, PReceivedSignalingMes
     switch (pReceivedSignalingMessage->signalingMessage.messageType) {
         case SIGNALING_MESSAGE_TYPE_OFFER:
             // Check if we already have an ongoing master session with the same peer
+            DLOGD("SIGNALING_MESSAGE_TYPE_OFFER");
             CHK_ERR(!peerConnectionFound, STATUS_INVALID_OPERATION, "Peer connection %s is in progress",
                     pReceivedSignalingMessage->signalingMessage.peerClientId);
 
@@ -122,19 +140,22 @@ STATUS signalingClientMessageReceivedFn(UINT64 customData, PReceivedSignalingMes
                 // Need to remove the pending queue if any.
                 // This is a simple optimization as the session cleanup will
                 // handle the cleanup of pending message queue after a while
+                DLOGD("getPendingMessageQueueForHash");
                 CHK_STATUS(
                     getPendingMessageQueueForHash(pGstKvsPlugin->pPendingSignalingMessageForRemoteClient, clientIdHash, TRUE, &pPendingMessageQueue));
 
                 CHK(FALSE, retStatus);
             }
+            DLOGD("createWebRtcStreamingSession");
             CHK_STATUS(
                 createWebRtcStreamingSession(pGstKvsPlugin, pReceivedSignalingMessage->signalingMessage.peerClientId, TRUE, &pStreamingSession));
             pStreamingSession->offerReceiveTime = GETTIME();
             MUTEX_LOCK(pGstKvsPlugin->sessionListReadLock);
             pGstKvsPlugin->streamingSessionList[pGstKvsPlugin->streamingSessionCount++] = pStreamingSession;
             MUTEX_UNLOCK(pGstKvsPlugin->sessionListReadLock);
-
+            DLOGD("handleOffer");
             CHK_STATUS(handleOffer(pGstKvsPlugin, pStreamingSession, &pReceivedSignalingMessage->signalingMessage));
+            DLOGD("hashTablePut");
             CHK_STATUS(hashTablePut(pGstKvsPlugin->pRtcPeerConnectionForRemoteClient, clientIdHash, (UINT64) pStreamingSession));
 
             // If there are any ice candidate messages in the queue for this client id, submit them now.
@@ -149,6 +170,7 @@ STATUS signalingClientMessageReceivedFn(UINT64 customData, PReceivedSignalingMes
             break;
 
         case SIGNALING_MESSAGE_TYPE_ANSWER:
+            DLOGD("SIGNALING_MESSAGE_TYPE_ANSWER");
             /*
              * for viewer, pStreamingSession should've already been created. insert the client id and
              * streaming session into pRtcPeerConnectionForRemoteClient for subsequent ice candidate messages.
@@ -171,22 +193,26 @@ STATUS signalingClientMessageReceivedFn(UINT64 customData, PReceivedSignalingMes
             break;
 
         case SIGNALING_MESSAGE_TYPE_ICE_CANDIDATE:
+            DLOGD("SIGNALING_MESSAGE_TYPE_ICE_CANDIDATE");
             /*
              * if peer connection hasn't been created, create an queue to store the ice candidate message. Otherwise
              * submit the signaling message into the corresponding streaming session.
              */
             if (!peerConnectionFound) {
+                DLOGD("peerConnection not Found");
                 CHK_STATUS(getPendingMessageQueueForHash(pGstKvsPlugin->pPendingSignalingMessageForRemoteClient, clientIdHash, FALSE,
                                                          &pPendingMessageQueue));
                 if (pPendingMessageQueue == NULL) {
+                    DLOGD("createMessageQueue");
                     CHK_STATUS(createMessageQueue(clientIdHash, &pPendingMessageQueue));
+                    DLOGD("stackQueueEnqueue");
                     CHK_STATUS(stackQueueEnqueue(pGstKvsPlugin->pPendingSignalingMessageForRemoteClient, (UINT64) pPendingMessageQueue));
                 }
-
+                DLOGD("pReceivedSignalingMessageCopy");
                 pReceivedSignalingMessageCopy = (PReceivedSignalingMessage) MEMCALLOC(1, SIZEOF(ReceivedSignalingMessage));
 
                 *pReceivedSignalingMessageCopy = *pReceivedSignalingMessage;
-
+                DLOGD("stackQueueEnqueue");
                 CHK_STATUS(stackQueueEnqueue(pPendingMessageQueue->messageQueue, (UINT64) pReceivedSignalingMessageCopy));
 
                 // NULL the pointers to not free any longer
@@ -195,6 +221,7 @@ STATUS signalingClientMessageReceivedFn(UINT64 customData, PReceivedSignalingMes
             } else {
                 CHK_STATUS(handleRemoteCandidate(pStreamingSession, &pReceivedSignalingMessage->signalingMessage));
             }
+            DLOGD("out signalingClientMessageReceivedFn");
             break;
 
         default:
@@ -219,17 +246,18 @@ CleanUp:
 
 STATUS initKinesisVideoWebRtc(PGstKvsPlugin pGstPlugin)
 {
+    DLOGD("initKinesisVideoWebRtc");
     STATUS retStatus = STATUS_SUCCESS;
-
     CHK(pGstPlugin != NULL, STATUS_NULL_ARG);
 
     DLOGD("Init invoked");
     ATOMIC_STORE_BOOL(&pGstPlugin->terminate, FALSE);
     ATOMIC_STORE_BOOL(&pGstPlugin->recreateSignalingClient, FALSE);
     ATOMIC_STORE_BOOL(&pGstPlugin->signalingConnected, FALSE);
-
+    DLOGE("set sessionLock");
     pGstPlugin->sessionLock = MUTEX_CREATE(TRUE);
 
+    DLOGE("set sessionListReadLock");
     pGstPlugin->sessionListReadLock = MUTEX_CREATE(FALSE);
     pGstPlugin->signalingLock = MUTEX_CREATE(FALSE);
 
@@ -241,13 +269,16 @@ STATUS initKinesisVideoWebRtc(PGstKvsPlugin pGstPlugin)
     MEMSET(&pGstPlugin->kvsContext.signalingClientInfo, 0x00, SIZEOF(SignalingClientInfo));
     MEMSET(&pGstPlugin->kvsContext.signalingClientCallbacks, 0x00, SIZEOF(SignalingClientCallbacks));
 
+    DLOGE("set channelInfo");
     pGstPlugin->kvsContext.channelInfo.pRegion = pGstPlugin->pRegion;
     pGstPlugin->kvsContext.channelInfo.version = CHANNEL_INFO_CURRENT_VERSION;
+    DLOGE("set channelName");
     pGstPlugin->kvsContext.channelInfo.pChannelName = pGstPlugin->gstParams.channelName;
-    pGstPlugin->kvsContext.channelInfo.pKmsKeyId = NULL;
+    // pGstPlugin->kvsContext.channelInfo.pKmsKeyId = NULL;
     pGstPlugin->kvsContext.channelInfo.pUserAgentPostfix = KVS_WEBRTC_CLIENT_USER_AGENT_NAME;
-    pGstPlugin->kvsContext.channelInfo.tagCount = pGstPlugin->kvsContext.pStreamInfo->tagCount;
-    pGstPlugin->kvsContext.channelInfo.pTags = pGstPlugin->kvsContext.pStreamInfo->tags;
+    DLOGE("set tagCount");
+    // pGstPlugin->kvsContext.channelInfo.tagCount = pGstPlugin->kvsContext.pStreamInfo->tagCount;
+    // pGstPlugin->kvsContext.channelInfo.pTags = pGstPlugin->kvsContext.pStreamInfo->tags;
     pGstPlugin->kvsContext.channelInfo.channelType = SIGNALING_CHANNEL_TYPE_SINGLE_MASTER;
     pGstPlugin->kvsContext.channelInfo.channelRoleType = SIGNALING_CHANNEL_ROLE_TYPE_MASTER;
     pGstPlugin->kvsContext.channelInfo.cachingPolicy = SIGNALING_API_CALL_CACHE_TYPE_FILE;
@@ -255,41 +286,52 @@ STATUS initKinesisVideoWebRtc(PGstKvsPlugin pGstPlugin)
     pGstPlugin->kvsContext.channelInfo.asyncIceServerConfig = TRUE; // has no effect
     pGstPlugin->kvsContext.channelInfo.retry = TRUE;
     pGstPlugin->kvsContext.channelInfo.reconnect = TRUE;
+    DLOGE("set caCertPath");
     pGstPlugin->kvsContext.channelInfo.pCertPath = pGstPlugin->caCertPath;
     pGstPlugin->kvsContext.channelInfo.messageTtl = 0; // Default is 60 seconds
 
+    DLOGE("set signalingClientCallbacks");
     pGstPlugin->kvsContext.signalingClientCallbacks.version = SIGNALING_CLIENT_CALLBACKS_CURRENT_VERSION;
     pGstPlugin->kvsContext.signalingClientCallbacks.errorReportFn = signalingClientErrorFn;
     pGstPlugin->kvsContext.signalingClientCallbacks.stateChangeFn = signalingClientStateChangedFn;
     pGstPlugin->kvsContext.signalingClientCallbacks.messageReceivedFn = signalingClientMessageReceivedFn;
     pGstPlugin->kvsContext.signalingClientCallbacks.customData = (UINT64) pGstPlugin;
 
+    DLOGE("set signalingClientInfo");
     pGstPlugin->kvsContext.signalingClientInfo.version = SIGNALING_CLIENT_INFO_CURRENT_VERSION;
-    pGstPlugin->kvsContext.signalingClientInfo.loggingLevel = pGstPlugin->kvsContext.pDeviceInfo->clientInfo.loggerLogLevel;
+    // pGstPlugin->kvsContext.signalingClientInfo.loggingLevel = pGstPlugin->kvsContext.pDeviceInfo->clientInfo.loggerLogLevel;
     STRCPY(pGstPlugin->kvsContext.signalingClientInfo.clientId, DEFAULT_MASTER_CLIENT_ID);
     pGstPlugin->kvsContext.signalingClientInfo.cacheFilePath = NULL; // Use the default path
 
+
+    DLOGE("stackQueueCreate");
     CHK_STATUS(stackQueueCreate(&pGstPlugin->pPendingSignalingMessageForRemoteClient));
+    DLOGE("hashTableCreateWithParams");
     CHK_STATUS(hashTableCreateWithParams(GST_PLUGIN_HASH_TABLE_BUCKET_COUNT, GST_PLUGIN_HASH_TABLE_BUCKET_LENGTH,
                                          &pGstPlugin->pRtcPeerConnectionForRemoteClient));
 
+
+    DLOGE("timerQueueCreate");
     CHK_STATUS(timerQueueCreate(&pGstPlugin->kvsContext.timerQueueHandle));
-
+    DLOGE("stackQueueCreate");
     CHK_STATUS(stackQueueCreate(&pGstPlugin->pregeneratedCertificates));
-
+    DLOGE("timerQueueAddTimer");
     CHK_LOG_ERR(retStatus = timerQueueAddTimer(pGstPlugin->kvsContext.timerQueueHandle, GST_PLUGIN_PRE_GENERATE_CERT_START,
                                                GST_PLUGIN_PRE_GENERATE_CERT_PERIOD, pregenerateCertTimerCallback, (UINT64) pGstPlugin,
                                                &pGstPlugin->pregenerateCertTimerId));
 
     // Create the signaling client
+    DLOGE("createSignalingClientSync");
     CHK_STATUS(createSignalingClientSync(&pGstPlugin->kvsContext.signalingClientInfo, &pGstPlugin->kvsContext.channelInfo,
                                          &pGstPlugin->kvsContext.signalingClientCallbacks, pGstPlugin->kvsContext.pCredentialProvider,
                                          &pGstPlugin->kvsContext.signalingHandle));
 
     // Get signaling client to Ready state
+    DLOGE("signalingClientFetchSync");
     CHK_STATUS(signalingClientFetchSync(pGstPlugin->kvsContext.signalingHandle));
 
     // Get signaling client to connect state
+    DLOGE("Get signaling client to connect state");
     if (ATOMIC_LOAD_BOOL(&pGstPlugin->connectWebRtc)) {
         CHK_STATUS(signalingClientConnectSync(pGstPlugin->kvsContext.signalingHandle));
     }
@@ -303,6 +345,7 @@ CleanUp:
 
 STATUS createMessageQueue(UINT64 hashValue, PPendingMessageQueue* ppPendingMessageQueue)
 {
+    DLOGD("createMessageQueue");
     STATUS retStatus = STATUS_SUCCESS;
     PPendingMessageQueue pPendingMessageQueue = NULL;
 
@@ -329,6 +372,7 @@ CleanUp:
 
 STATUS freeMessageQueue(PPendingMessageQueue pPendingMessageQueue)
 {
+    DLOGD("freeMessageQueue");
     STATUS retStatus = STATUS_SUCCESS;
 
     // free is idempotent
@@ -347,6 +391,7 @@ CleanUp:
 
 STATUS freeGstKvsWebRtcPlugin(PGstKvsPlugin pGstKvsPlugin)
 {
+    DLOGD("freeGstKvsWebRtcPlugin");
     STATUS retStatus = STATUS_SUCCESS;
     UINT32 i;
     UINT64 data;
@@ -465,6 +510,7 @@ CleanUp:
 // Return ICE server stats for a specific streaming session
 STATUS gatherIceServerStats(PWebRtcStreamingSession pStreamingSession)
 {
+    DLOGD("gatherIceServerStats");
     STATUS retStatus = STATUS_SUCCESS;
     RtcStats rtcmetrics;
     UINT32 j;
@@ -489,6 +535,7 @@ CleanUp:
 
 STATUS freeWebRtcStreamingSession(PWebRtcStreamingSession* ppStreamingSession)
 {
+    DLOGD("freeWebRtcStreamingSession");
     STATUS retStatus = STATUS_SUCCESS;
     PWebRtcStreamingSession pStreamingSession = NULL;
     PGstKvsPlugin pGstKvsPlugin;
@@ -536,6 +583,7 @@ CleanUp:
 STATUS streamingSessionOnShutdown(PWebRtcStreamingSession pStreamingSession, UINT64 customData,
                                   StreamSessionShutdownCallback streamSessionShutdownCallback)
 {
+    DLOGD("streamingSessionOnShutdown");
     STATUS retStatus = STATUS_SUCCESS;
 
     CHK(pStreamingSession != NULL && streamSessionShutdownCallback != NULL, STATUS_NULL_ARG);
@@ -550,6 +598,7 @@ CleanUp:
 
 STATUS pregenerateCertTimerCallback(UINT32 timerId, UINT64 currentTime, UINT64 customData)
 {
+    DLOGD("pregenerateCertTimerCallback");
     UNUSED_PARAM(timerId);
     UNUSED_PARAM(currentTime);
     STATUS retStatus = STATUS_SUCCESS;
@@ -596,6 +645,7 @@ CleanUp:
 
 STATUS getPendingMessageQueueForHash(PStackQueue pPendingQueue, UINT64 clientHash, BOOL remove, PPendingMessageQueue* ppPendingMessageQueue)
 {
+    DLOGD("getPendingMessageQueueForHash");
     STATUS retStatus = STATUS_SUCCESS;
     PPendingMessageQueue pPendingMessageQueue = NULL;
     StackQueueIterator iterator;
@@ -603,25 +653,31 @@ STATUS getPendingMessageQueueForHash(PStackQueue pPendingQueue, UINT64 clientHas
     UINT64 data;
 
     CHK(pPendingQueue != NULL && ppPendingMessageQueue != NULL, STATUS_NULL_ARG);
-
+    DLOGD("stackQueueGetIterator");
     CHK_STATUS(stackQueueGetIterator(pPendingQueue, &iterator));
     while (iterate && IS_VALID_ITERATOR(iterator)) {
         CHK_STATUS(stackQueueIteratorGetItem(iterator, &data));
         CHK_STATUS(stackQueueIteratorNext(&iterator));
 
         pPendingMessageQueue = (PPendingMessageQueue) data;
-
+        DLOGD("pPendingMessageQueue");
         if (clientHash == pPendingMessageQueue->hashValue) {
+            DLOGD("pPendingMessageQueue->hashValue");
             *ppPendingMessageQueue = pPendingMessageQueue;
+            DLOGD("*ppPendingMessageQueue = pPendingMessageQueue;");
             iterate = FALSE;
 
             // Check if the item needs to be removed
             if (remove) {
                 // This is OK to do as we are terminating the iterator anyway
+                DLOGD("stackQueueRemoveItem");
                 CHK_STATUS(stackQueueRemoveItem(pPendingQueue, data));
             }
+            DLOGD("out pPendingMessageQueue");
         }
     }
+
+    DLOGD("out getPendingMessageQueueForHash");
 
 CleanUp:
 
@@ -630,6 +686,7 @@ CleanUp:
 
 STATUS removeExpiredMessageQueues(PStackQueue pPendingQueue)
 {
+    DLOGD("removeExpiredMessageQueues");
     STATUS retStatus = STATUS_SUCCESS;
     PPendingMessageQueue pPendingMessageQueue = NULL;
     UINT32 i, count;
@@ -638,6 +695,7 @@ STATUS removeExpiredMessageQueues(PStackQueue pPendingQueue)
     CHK(pPendingQueue != NULL, STATUS_NULL_ARG);
 
     curTime = GETTIME();
+    DLOGD("stackQueueGetCount");
     CHK_STATUS(stackQueueGetCount(pPendingQueue, &count));
 
     // Dequeue and enqueue in order to not break the iterator while removing an item
@@ -662,6 +720,7 @@ CleanUp:
 
 STATUS createWebRtcStreamingSession(PGstKvsPlugin pGstKvsPlugin, PCHAR peerId, BOOL isMaster, PWebRtcStreamingSession* ppStreamingSession)
 {
+    DLOGD("createWebRtcStreamingSession");
     STATUS retStatus = STATUS_SUCCESS;
     RtcMediaStreamTrack videoTrack, audioTrack;
     PWebRtcStreamingSession pStreamingSession = NULL;
@@ -753,6 +812,7 @@ CleanUp:
 
 STATUS initializePeerConnection(PGstKvsPlugin pGstKvsPlugin, PRtcPeerConnection* ppRtcPeerConnection)
 {
+    DLOGD("initializePeerConnection");
     ENTERS();
     STATUS retStatus = STATUS_SUCCESS;
     RtcConfiguration configuration;
@@ -836,6 +896,7 @@ CleanUp:
 
 VOID onIceCandidateHandler(UINT64 customData, PCHAR candidateJson)
 {
+    DLOGD("onIceCandidateHandler");
     STATUS retStatus = STATUS_SUCCESS;
     PWebRtcStreamingSession pStreamingSession = (PWebRtcStreamingSession) customData;
     SignalingMessage message;
@@ -874,6 +935,7 @@ CleanUp:
 
 STATUS sendSignalingMessage(PWebRtcStreamingSession pStreamingSession, PSignalingMessage pMessage)
 {
+    DLOGD("sendSignalingMessage");
     STATUS retStatus = STATUS_SUCCESS;
     BOOL locked = FALSE;
 
@@ -899,6 +961,7 @@ CleanUp:
 
 STATUS respondWithAnswer(PWebRtcStreamingSession pStreamingSession)
 {
+    DLOGD("respondWithAnswer");
     STATUS retStatus = STATUS_SUCCESS;
     SignalingMessage message;
     UINT32 buffLen = MAX_SIGNALING_MESSAGE_LEN;
@@ -921,6 +984,7 @@ CleanUp:
 
 STATUS submitPendingIceCandidate(PPendingMessageQueue pPendingMessageQueue, PWebRtcStreamingSession pStreamingSession)
 {
+    DLOGD("submitPendingIceCandidate");
     STATUS retStatus = STATUS_SUCCESS;
     BOOL noPendingSignalingMessageForClient = FALSE;
     PReceivedSignalingMessage pReceivedSignalingMessage = NULL;
@@ -953,12 +1017,14 @@ CleanUp:
 
 VOID sampleBandwidthEstimationHandler(UINT64 customData, DOUBLE maxiumBitrate)
 {
+    DLOGD("sampleBandwidthEstimationHandler");
     UNUSED_PARAM(customData);
     DLOGD("Received bitrate suggestion: %f", maxiumBitrate);
 }
 
 STATUS handleRemoteCandidate(PWebRtcStreamingSession pStreamingSession, PSignalingMessage pSignalingMessage)
 {
+    DLOGD("handleRemoteCandidate");
     STATUS retStatus = STATUS_SUCCESS;
     RtcIceCandidateInit iceCandidate;
     CHK(pStreamingSession != NULL && pSignalingMessage != NULL, STATUS_NULL_ARG);
@@ -974,6 +1040,7 @@ CleanUp:
 
 STATUS logSelectedIceCandidatesInformation(PWebRtcStreamingSession pStreamingSession)
 {
+    DLOGD("logSelectedIceCandidatesInformation");
     STATUS retStatus = STATUS_SUCCESS;
     RtcStats rtcMetrics;
 
@@ -1004,6 +1071,7 @@ CleanUp:
 
 STATUS handleOffer(PGstKvsPlugin pGstKvsPlugin, PWebRtcStreamingSession pStreamingSession, PSignalingMessage pSignalingMessage)
 {
+    DLOGD("handleOffer");
     STATUS retStatus = STATUS_SUCCESS;
     RtcSessionDescriptionInit offerSessionDescriptionInit;
     NullableBool canTrickle;
@@ -1053,6 +1121,7 @@ CleanUp:
 
 STATUS handleAnswer(PGstKvsPlugin pGstKvsPlugin, PWebRtcStreamingSession pStreamingSession, PSignalingMessage pSignalingMessage)
 {
+    DLOGD("handleAnswer");
     UNUSED_PARAM(pGstKvsPlugin);
     STATUS retStatus = STATUS_SUCCESS;
     RtcSessionDescriptionInit answerSessionDescriptionInit;
@@ -1071,6 +1140,7 @@ CleanUp:
 
 STATUS getIceCandidatePairStatsCallback(UINT32 timerId, UINT64 currentTime, UINT64 customData)
 {
+    DLOGD("getIceCandidatePairStatsCallback");
     UNUSED_PARAM(timerId);
     UNUSED_PARAM(currentTime);
     STATUS retStatus = STATUS_SUCCESS;
@@ -1167,6 +1237,7 @@ CleanUp:
 
 PVOID receiveGstreamerAudioVideo(PVOID args)
 {
+    DLOGD("receiveGstreamerAudioVideo");
     STATUS retStatus = STATUS_SUCCESS;
     GstElement *pipeline = NULL, *appsrcAudio = NULL;
     GstBus* bus;
@@ -1239,6 +1310,7 @@ CleanUp:
 
 VOID onGstAudioFrameReady(UINT64 customData, PFrame pFrame)
 {
+    DLOGD("onGstAudioFrameReady");
     GstFlowReturn ret;
     GstBuffer* buffer;
     GstElement* appsrcAudio = (GstElement*) customData;
@@ -1256,6 +1328,7 @@ VOID onGstAudioFrameReady(UINT64 customData, PFrame pFrame)
 
 VOID onSampleStreamingSessionShutdown(UINT64 customData, PWebRtcStreamingSession pStreamingSession)
 {
+    DLOGD("onSampleStreamingSessionShutdown");
     UNUSED_PARAM(pStreamingSession);
     GstElement* appsrc = (GstElement*) customData;
     GstFlowReturn ret;
@@ -1265,6 +1338,7 @@ VOID onSampleStreamingSessionShutdown(UINT64 customData, PWebRtcStreamingSession
 
 STATUS sessionServiceHandler(UINT32 timerId, UINT64 currentTime, UINT64 customData)
 {
+    DLOGD("sessionServiceHandler");
     STATUS retStatus = STATUS_SUCCESS;
     PGstKvsPlugin pGstKvsPlugin = (PGstKvsPlugin) customData;
     PWebRtcStreamingSession pStreamingSession = NULL;
@@ -1340,6 +1414,7 @@ CleanUp:
 
 STATUS putFrameToWebRtcPeers(PGstKvsPlugin pGstKvsPlugin, PFrame pFrame, ELEMENTARY_STREAM_NAL_FORMAT nalFormat)
 {
+    DLOGD("putFrameToWebRtcPeers");
     STATUS retStatus = STATUS_SUCCESS;
     PWebRtcStreamingSession pStreamingSession;
     PRtcRtpTransceiver pRtcRtpTransceiver;
@@ -1378,6 +1453,7 @@ CleanUp:
 
 STATUS adaptVideoFrameFromAvccToAnnexB(PGstKvsPlugin pGstKvsPlugin, PFrame pFrame, ELEMENTARY_STREAM_NAL_FORMAT nalFormat)
 {
+    DLOGD("adaptVideoFrameFromAvccToAnnexB");
     STATUS retStatus = STATUS_SUCCESS;
     PBYTE pCurPnt, pEndPnt, pDst;
     UINT32 runLen = 0, overallSize;
