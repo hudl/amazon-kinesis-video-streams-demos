@@ -46,6 +46,7 @@ CleanUp:
 
 gboolean setGstIotInfo(GQuark fieldId, const GValue* value, gpointer userData)
 {
+    DLOGD("setGstIotInfo");
     STATUS retStatus = STATUS_SUCCESS;
     PCHAR pFieldName;
     PIotInfo pIotInfo = (PIotInfo) userData;
@@ -54,18 +55,24 @@ gboolean setGstIotInfo(GQuark fieldId, const GValue* value, gpointer userData)
     CHK_ERR(G_VALUE_HOLDS_STRING(value), STATUS_INVALID_ARG, "Tag value should be of a string type");
 
     pFieldName = (PCHAR) g_quark_to_string(fieldId);
-
+    DLOGD("setGstIotInfo");
     if (0 == STRCMP(pFieldName, IOT_GET_CREDENTIAL_ENDPOINT)) {
+        DLOGD("IOT_GET_CREDENTIAL_ENDPOINT");
         STRNCPY(pIotInfo->endPoint, g_value_get_string(value), MAX_URI_CHAR_LEN);
     } else if (0 == STRCMP(pFieldName, CERTIFICATE_PATH)) {
+        DLOGD("CERTIFICATE_PATH");
         STRNCPY(pIotInfo->certPath, g_value_get_string(value), MAX_PATH_LEN);
     } else if (0 == STRCMP(pFieldName, PRIVATE_KEY_PATH)) {
+        DLOGD("PRIVATE_KEY_PATH");
         STRNCPY(pIotInfo->privateKeyPath, g_value_get_string(value), MAX_PATH_LEN);
     } else if (0 == STRCMP(pFieldName, CA_CERT_PATH)) {
+        DLOGD("CA_CERT_PATH");
         STRNCPY(pIotInfo->caCertPath, g_value_get_string(value), MAX_PATH_LEN);
     } else if (0 == STRCMP(pFieldName, ROLE_ALIASES)) {
+        DLOGD("ROLE_ALIASES");
         STRNCPY(pIotInfo->roleAlias, g_value_get_string(value), MAX_ROLE_ALIAS_LEN);
     }
+    DLOGD("end");
 
 CleanUp:
 
@@ -76,10 +83,10 @@ CleanUp:
 
 STATUS gstStructToIotInfo(GstStructure* pGstStruct, PIotInfo pIotInfo)
 {
+    DLOGD("gstStructToIotInfo");
     STATUS retStatus = STATUS_SUCCESS;
 
     CHK(pGstStruct != NULL && pIotInfo != NULL, STATUS_NULL_ARG);
-
     MEMSET(pIotInfo, 0x00, SIZEOF(IotInfo));
     CHK(gst_structure_foreach(pGstStruct, setGstIotInfo, pIotInfo), STATUS_INVALID_ARG);
 

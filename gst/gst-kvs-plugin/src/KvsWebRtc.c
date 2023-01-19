@@ -101,16 +101,6 @@ STATUS signalingClientMessageReceivedFn(UINT64 customData, PReceivedSignalingMes
     DLOGD("pGstKvsPlugin->sessionLock");
     MUTEX_LOCK(pGstKvsPlugin->sessionLock);
     locked = TRUE;
-    // if (IS_VALID_MUTEX_VALUE(pGstKvsPlugin->sessionLock)) {
-    //     DLOGD("valid mutex lock");
-    //     if (!locked)
-    //     {
-    //         DLOGD("unlocked");
-    //         MUTEX_LOCK(pGstKvsPlugin->sessionLock);
-    //     }
-    //     DLOGD("locked");
-    //     locked = TRUE;
-    // }
     clientIdHash = COMPUTE_CRC32((PBYTE) pReceivedSignalingMessage->signalingMessage.peerClientId,
                                  (UINT32) STRLEN(pReceivedSignalingMessage->signalingMessage.peerClientId));
     DLOGD("hashTableContains");
@@ -274,11 +264,8 @@ STATUS initKinesisVideoWebRtc(PGstKvsPlugin pGstPlugin)
     pGstPlugin->kvsContext.channelInfo.version = CHANNEL_INFO_CURRENT_VERSION;
     DLOGE("set channelName");
     pGstPlugin->kvsContext.channelInfo.pChannelName = pGstPlugin->gstParams.channelName;
-    // pGstPlugin->kvsContext.channelInfo.pKmsKeyId = NULL;
     pGstPlugin->kvsContext.channelInfo.pUserAgentPostfix = KVS_WEBRTC_CLIENT_USER_AGENT_NAME;
     DLOGE("set tagCount");
-    // pGstPlugin->kvsContext.channelInfo.tagCount = pGstPlugin->kvsContext.pStreamInfo->tagCount;
-    // pGstPlugin->kvsContext.channelInfo.pTags = pGstPlugin->kvsContext.pStreamInfo->tags;
     pGstPlugin->kvsContext.channelInfo.channelType = SIGNALING_CHANNEL_TYPE_SINGLE_MASTER;
     pGstPlugin->kvsContext.channelInfo.channelRoleType = SIGNALING_CHANNEL_ROLE_TYPE_MASTER;
     pGstPlugin->kvsContext.channelInfo.cachingPolicy = SIGNALING_API_CALL_CACHE_TYPE_FILE;
@@ -299,7 +286,6 @@ STATUS initKinesisVideoWebRtc(PGstKvsPlugin pGstPlugin)
 
     DLOGE("set signalingClientInfo");
     pGstPlugin->kvsContext.signalingClientInfo.version = SIGNALING_CLIENT_INFO_CURRENT_VERSION;
-    // pGstPlugin->kvsContext.signalingClientInfo.loggingLevel = pGstPlugin->kvsContext.pDeviceInfo->clientInfo.loggerLogLevel;
     STRCPY(pGstPlugin->kvsContext.signalingClientInfo.clientId, DEFAULT_MASTER_CLIENT_ID);
     pGstPlugin->kvsContext.signalingClientInfo.cacheFilePath = NULL; // Use the default path
 
