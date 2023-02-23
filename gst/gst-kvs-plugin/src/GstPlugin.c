@@ -123,6 +123,10 @@ STATUS initKinesisVideoStructs(PGstKvsPlugin pGstPlugin)
     // Zero out the kvs sub-structures for proper cleanup later
     MEMSET(&pGstPlugin->kvsContext, 0x00, SIZEOF(KvsContext));
 
+    // Load the CA cert path
+    lookForSslCert(pGstPlugin);
+    DLOGD("lookForSslCert");
+
     pSessionToken = GETENV(SESSION_TOKEN_ENV_VAR);
     if (0 == STRCMP(pGstPlugin->gstParams.accessKey, DEFAULT_ACCESS_KEY)) { // if no static credential is available in plugin property.
         DLOGD("no static cred in plugin");
