@@ -1,5 +1,8 @@
 #define LOG_CLASS "KvsWebRtc"
 #include "GstPlugin.h"
+#include "VirtcamCurl.h"
+
+PCameraView gVirtcamView = NULL;
 
 STATUS signalingClientStateChangedFn(UINT64 customData, SIGNALING_CLIENT_STATE state)
 {
@@ -38,7 +41,15 @@ VOID onDataChannelMessage(UINT64 customData, PRtcDataChannel pDataChannel, BOOL 
     if (isBinary) {
         DLOGI("DataChannel Binary Message");
     } else {
-        DLOGI("DataChannel String Message: %.*s\n", pMessageLen, pMessage);
+        char keyCode[pMessageLen + 1];
+        memcpy(keyCode, pMessage, pMessageLen);
+        keyCode[pMessageLen] = '\0';
+
+        DLOGI("DataChannel Key Code: %s\n", keyCode);
+
+        if (!moveViewWithKey(keyCode)) {
+            DLOGI("Move remote-control camera failed");
+        }
     }
 }
 
@@ -290,10 +301,20 @@ STATUS initKinesisVideoWebRtc(PGstKvsPlugin pGstPlugin)
         CHK_STATUS(signalingClientConnectSync(pGstPlugin->kvsContext.signalingHandle));
     }
 
+    /* Initialize virtcam view and thread */
+    PCameraView pVirtcamView = NULL;
+    curl_global_init(CURL_GLOBAL_ALL);
+    CHK_STATUS(createVirtcamView(&pVirtcamView));
+    if (!ATOMIC_EXCHANGE_BOOL(&pVirtcamView->viewThreadStarted, TRUE)) {
+        THREAD_CREATE(&pVirtcamView->viewTid, checkNewRecordingRoutine, (PVOID) pVirtcamView);
+        printf("[KVS GStreamer Master] Create thread to check for new cameraId\n");
+    }
+
+    gVirtcamView = pVirtcamView;
+
 CleanUp:
 
     CHK_LOG_ERR(retStatus);
-
     return retStatus;
 }
 
@@ -453,6 +474,9 @@ STATUS freeGstKvsWebRtcPlugin(PGstKvsPlugin pGstKvsPlugin)
         pGstKvsPlugin->pregeneratedCertificates = NULL;
     }
 
+    curl_global_cleanup();
+    freeVirtcamView(gVirtcamView);
+    
 CleanUp:
 
     return retStatus;
@@ -1461,4 +1485,28 @@ STATUS adaptVideoFrameFromAvccToAnnexB(PGstKvsPlugin pGstKvsPlugin, PFrame pFram
 CleanUp:
 
     return retStatus;
+}
+
+PVOID checkNewRecordingRoutine(PVOID args) {
+    // Request remote-control camera ID from virtcam every kCheckNewRecordingFrequency seconds
+    const int kCheckNewRecordingFrequency = 1;
+    PCameraView pVirtcamView = (PCameraView) args;
+    CURL* curl_handle = virtcamCurlInit();
+
+    while (!ATOMIC_LOAD_BOOL(&pVirtcamView->interrupted)) {
+        int newId = curlGetCameraId(curl_handle);
+        MUTEX_LOCK(pVirtcamView->viewLock);
+        // A changed cameraIdx indicates a new recording
+        if (pVirtcamView->cameraIdx != newId) {
+            DLOGI("Remote control cameraId changed to: %d", pVirtcamView->cameraIdx);
+            pVirtcamView->cameraIdx = newId;
+            setDefaultVirtcamView(pVirtcamView);
+            if (!curlMoveCamera(*pVirtcamView)) {
+                DLOGI("Move remote-control camera failed");
+            }
+        }
+        MUTEX_UNLOCK(pVirtcamView->viewLock);
+        sleep(kCheckNewRecordingFrequency);
+    }
+    curl_easy_cleanup(curl_handle);
 }

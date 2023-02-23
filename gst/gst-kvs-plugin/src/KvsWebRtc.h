@@ -41,6 +41,8 @@
 #define IS_NALU_H265_IDR_HEADER(h)         ((((h) >> 1) == IDR_W_RADL_NALU_TYPE || ((h) >> 1) == IDR_N_LP_NALU_TYPE))
 #define IS_NALU_H265_VPS_SPS_PPS_HEADER(h) (((h) >> 1) == H265_VPS_NALU_TYPE || ((h) >> 1) == H265_SPS_NALU_TYPE || ((h) >> 1) == H265_PPS_NALU_TYPE)
 
+#include "View.h"
+
 typedef VOID (*StreamSessionShutdownCallback)(UINT64, PWebRtcStreamingSession);
 
 STATUS signalingClientStateChangedFn(UINT64, SIGNALING_CLIENT_STATE);
@@ -77,5 +79,6 @@ VOID onSampleStreamingSessionShutdown(UINT64, PWebRtcStreamingSession);
 STATUS sessionServiceHandler(UINT32, UINT64, UINT64);
 STATUS putFrameToWebRtcPeers(PGstKvsPlugin, PFrame, ELEMENTARY_STREAM_NAL_FORMAT);
 STATUS adaptVideoFrameFromAvccToAnnexB(PGstKvsPlugin, PFrame, ELEMENTARY_STREAM_NAL_FORMAT);
+PVOID checkNewRecordingRoutine(PVOID);
 
 #endif //__KVS_WEBRTC_FUNCTIONALITY_H__
