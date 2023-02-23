@@ -648,20 +648,6 @@ BOOL print_droppable_reason(BOOL isDroppable, GstBuffer* buffer) {
     }
 }
 
-void print_pts(int frame, const GstBuffer* buffer, GstSample* sample) {
-    GstSegment* segment = gst_sample_get_segment(sample);
-    GstClockTime buf_pts = gst_segment_to_running_time(segment, GST_FORMAT_TIME, buffer->pts);
-    DLOGW("%d: pts(%lu)", frame, buf_pts / 1000000);
-}
-
-BOOL should_drop(int cur_frames_count, int amount_to_drop, int dropFrameFreq) {
-    for (int i = 0; i < amount_to_drop; ++i) {
-        if ((cur_frames_count - i) % dropFrameFreq == 0)
-            return TRUE;
-    }
-    return FALSE;
-}
-
 GstFlowReturn gst_kvs_plugin_handle_buffer(GstCollectPads* pads, GstCollectData* track_data, GstBuffer* buf, gpointer user_data)
 {
     PGstKvsPlugin pGstKvsPlugin = GST_KVS_PLUGIN(user_data);
@@ -696,22 +682,8 @@ GstFlowReturn gst_kvs_plugin_handle_buffer(GstCollectPads* pads, GstCollectData*
         // drop if buffer contains header and has invalid timestamp
         (GST_BUFFER_FLAG_IS_SET(buf, GST_BUFFER_FLAG_HEADER) && (!GST_BUFFER_PTS_IS_VALID(buf) || !GST_BUFFER_DTS_IS_VALID(buf)));
 
-    static int frames_count = 0;
-    ++frames_count;
-    print_droppable_reason(isDroppable, buf);
-
-    // print_pts(frames_count, buf, sample);
-
-    const int kDropAmount = 0;
-    const int kDropFrameFreq = 30;
-
-    if (should_drop(frames_count, kDropAmount, kDropFrameFreq)) {
-        DLOGE("%d: DROPPED", frames_count);
-        goto CleanUp;
-    }
-
     if (isDroppable) {
-        DLOGE("Dropping frame with flag: %d", GST_BUFFER_FLAGS(buf));
+        print_droppable_reason(isDroppable, buf);
         goto CleanUp;
     }
 
