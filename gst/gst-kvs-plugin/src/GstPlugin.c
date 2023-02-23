@@ -808,6 +808,8 @@ GstPad* gst_kvs_plugin_request_new_pad(GstElement* element, GstPadTemplate* temp
         pGstKvsPlugin->mediaType = GST_PLUGIN_MEDIA_TYPE_AUDIO_ONLY;
     }
 
+    pGstKvsPlugin->onDataChannel = onDataChannel;
+
     newpad = GST_PAD_CAST(g_object_new(GST_TYPE_PAD, "name", padName, "direction", templ->direction, "template", templ, NULL));
 
     pTrackData =
