@@ -123,31 +123,22 @@ STATUS initKinesisVideoStructs(PGstKvsPlugin pGstPlugin)
     // Zero out the kvs sub-structures for proper cleanup later
     MEMSET(&pGstPlugin->kvsContext, 0x00, SIZEOF(KvsContext));
 
-    // Load the CA cert path
-    lookForSslCert(pGstPlugin);
-    DLOGD("lookForSslCert");
-
     pSessionToken = GETENV(SESSION_TOKEN_ENV_VAR);
     if (0 == STRCMP(pGstPlugin->gstParams.accessKey, DEFAULT_ACCESS_KEY)) { // if no static credential is available in plugin property.
-        DLOGD("no static cred in plugin");
         if (NULL == (pAccessKey = GETENV(ACCESS_KEY_ENV_VAR)) ||
-            NULL == (pSecretKey = GETENV(SECRET_KEY_ENV_VAR))) { 
-            DLOGD("no static cred in environment"); // if no static credential is available in env var.
+            NULL == (pSecretKey = GETENV(SECRET_KEY_ENV_VAR))) { // if no static credential is available in env var.
         }
     } else {
-        DLOGD("static cred in plugin");
         pAccessKey = pGstPlugin->gstParams.accessKey;
         pSecretKey = pGstPlugin->gstParams.secretKey;
     }
 
     if (NULL == (pGstPlugin->pRegion = GETENV(DEFAULT_REGION_ENV_VAR))) {
-        DLOGD("no static region in environment, set from plugin");
         pGstPlugin->pRegion = pGstPlugin->gstParams.awsRegion;
     }
 
     if (NULL == pGstPlugin->pRegion) {
         // Use the default
-        DLOGD("no static region in plugin, use default");
         pGstPlugin->pRegion = DEFAULT_AWS_REGION;
     }
 
@@ -162,19 +153,15 @@ STATUS initKinesisVideoStructs(PGstKvsPlugin pGstPlugin)
     // If we have File then we use file credential provider.
     // We also need to set the appropriate free function pointer.
     if (pAccessKey != NULL) {
-        DLOGD("pAccessKey != NULL");
         CHK_STATUS(
             createStaticCredentialProvider(pAccessKey, 0, pSecretKey, 0, pSessionToken, 0, MAX_UINT64, &pGstPlugin->kvsContext.pCredentialProvider));
         pGstPlugin->kvsContext.freeCredentialProviderFn = freeStaticCredentialProvider;
     } else if (pGstPlugin->gstParams.iotCertificate != NULL) {
-        DLOGD("iotCertificate!=NULL");
         CHK_STATUS(gstStructToIotInfo(pGstPlugin->gstParams.iotCertificate, &iotInfo));
         CHK_STATUS(createCurlIotCredentialProvider(iotInfo.endPoint, iotInfo.certPath, iotInfo.privateKeyPath, iotInfo.caCertPath, iotInfo.roleAlias,
                                                    pGstPlugin->gstParams.channelName, &pGstPlugin->kvsContext.pCredentialProvider));
-        DLOGD("set freeCredentialProviderFn");
         pGstPlugin->kvsContext.freeCredentialProviderFn = freeIotCredentialProvider;
-    } 
-    DLOGD("end initKinesisVideoStructs");
+    }
 
 CleanUp:
 
@@ -670,7 +657,6 @@ GstFlowReturn gst_kvs_plugin_handle_buffer(GstCollectPads* pads, GstCollectData*
 
     // eos reached
     if (buf == NULL && pTrackData == NULL) {
-        DLOGD("Sending eos");
 
         // send out eos message to gstreamer bus
         message = gst_message_new_eos(GST_OBJECT_CAST(pGstKvsPlugin));
@@ -828,7 +814,6 @@ GstPad* gst_kvs_plugin_request_new_pad(GstElement* element, GstPadTemplate* temp
 
     pGstKvsPlugin->numStreams++;
 
-    DLOGD("Added new request pad");
 
 CleanUp:
 
@@ -880,18 +865,15 @@ GstStateChangeReturn gst_kvs_plugin_change_state(GstElement* element, GstStateCh
                 ret = GST_STATE_CHANGE_FAILURE;
                 goto CleanUp;
             }
-            DLOGD("Finish initialize!");
 
             if (STATUS_FAILED(status = initTrackData(pGstKvsPlugin))) {
                 DLOGE("Failed to initialize track with 0x%08x", status);
                 ret = GST_STATE_CHANGE_FAILURE;
                 goto CleanUp;
             }
-            DLOGD("set firstPts");
             pGstKvsPlugin->firstPts = GST_CLOCK_TIME_NONE;
             pGstKvsPlugin->frameCount = 0;
             
-            DLOGD("set detectedCpdFormat");
             pGstKvsPlugin->detectedCpdFormat = ELEMENTARY_STREAM_NAL_FORMAT_UNKNOWN;
 
             // This needs to happen after we've read in ALL of the properties
@@ -899,7 +881,6 @@ GstStateChangeReturn gst_kvs_plugin_change_state(GstElement* element, GstStateCh
             if (!pGstKvsPlugin->gstParams.disableBufferClipping) {
                 gst_collect_pads_set_clip_function(pGstKvsPlugin->collect, GST_DEBUG_FUNCPTR(gst_collect_pads_clip_running_time), pGstKvsPlugin);
             }
-            DLOGD("initKinesisVideoWebRtc");
             if (STATUS_FAILED(status = initKinesisVideoWebRtc(pGstKvsPlugin))) {
                 DLOGE("Failed to initialize KVS signaling client with 0x%08x", status);
                 ret = GST_STATE_CHANGE_FAILURE;
