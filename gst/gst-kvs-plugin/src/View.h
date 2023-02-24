@@ -37,5 +37,6 @@ extern PCameraView gVirtcamView;
 VOID setDefaultVirtcamView(PCameraView);
 STATUS createVirtcamView(PCameraView*);
 bool isViewValid(const CameraView);
+STATUS freeVirtcamView(PCameraView);
 
 #endif  // __VIEW_H__
