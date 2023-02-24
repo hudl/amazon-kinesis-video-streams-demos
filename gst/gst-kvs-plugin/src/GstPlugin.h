@@ -44,22 +44,18 @@ typedef struct __PendingMessageQueue* PPendingMessageQueue;
 
 #include <gst/gst.h>
 #include <gst/base/gstcollectpads.h>
-#include <com/amazonaws/kinesis/video/cproducer/Include.h>
 #include <com/amazonaws/kinesis/video/webrtcclient/Include.h>
 #include "GstPluginUtils.h"
-#include "KvsProducer.h"
 #include "KvsWebRtc.h"
 
 typedef enum {
     PROP_0,
     PROP_CHANNEL_NAME,
-    PROP_STREAMING_TYPE,
     PROP_CONTENT_TYPE,
     PROP_CODEC_ID,
     PROP_ACCESS_KEY,
     PROP_SECRET_KEY,
     PROP_AWS_REGION,
-    PROP_LOG_LEVEL,
     PROP_IOT_CERTIFICATE,
     PROP_DISABLE_BUFFER_CLIPPING,
     PROP_ADAPT_CPD_NALS_TO_AVC,
@@ -67,7 +63,6 @@ typedef enum {
     PROP_FILE_LOG_PATH,
     PROP_TRICKLE_ICE,
     PROP_WEBRTC_CONNECTION_MODE,
-    PROP_ENABLE_STREAMING,
     PROP_WEBRTC_CONNECT,
 } KVS_GST_PLUGIN_PROPS;
 
@@ -75,9 +70,6 @@ typedef enum {
 #define KVS_ADD_METADATA_NAME          "name"
 #define KVS_ADD_METADATA_VALUE         "value"
 #define KVS_ADD_METADATA_PERSISTENT    "persist"
-
-#define KVS_ENABLE_STREAMING_G_STRUCT_NAME "kvs-enable-streaming"
-#define KVS_ENABLE_STREAMING_FIELD         "enable"
 
 #define KVS_CONNECT_WEBRTC_G_STRUCT_NAME "kvs-connect-webrtc"
 #define KVS_CONNECT_WEBRTC_FIELD         "connect"
@@ -110,7 +102,7 @@ typedef enum {
 
 G_BEGIN_DECLS
 
-#define KVS_GST_VERSION AWS_SDK_KVS_PRODUCER_VERSION_STRING
+// #define KVS_GST_VERSION AWS_SDK_KVS_PRODUCER_VERSION_STRING
 
 #define GST_TYPE_KVS_PLUGIN            (gst_kvs_plugin_get_type())
 #define GST_KVS_PLUGIN(obj)            (G_TYPE_CHECK_INSTANCE_CAST((obj), GST_TYPE_KVS_PLUGIN, GstKvsPlugin))
@@ -148,7 +140,6 @@ typedef struct __KvsContext* PKvsContext;
 typedef struct __GstParams GstParams;
 struct __GstParams {
     gchar* channelName;
-    STREAMING_TYPE streamingType;
     gchar* contentType;
     gchar* audioContentType;
     gchar* videoContentType;
@@ -157,7 +148,6 @@ struct __GstParams {
     gchar* accessKey;
     gchar* secretKey;
     gchar* awsRegion;
-    guint rotationPeriodInSeconds;
     guint logLevel;
     gchar* fileLogPath;
     GstStructure* iotCertificate;
@@ -269,7 +259,7 @@ struct __GstKvsPlugin {
     UINT64 lastDts;
     UINT64 basePts;
     UINT64 firstPts;
-    UINT64 producerStartTime;
+    UINT64 startTime;
 
     gchar* audioCodecId;
     guint numStreams;

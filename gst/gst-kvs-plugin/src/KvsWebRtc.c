@@ -1,6 +1,7 @@
 #define LOG_CLASS "KvsWebRtc"
 #include "GstPlugin.h"
 #include "Keyboard.h"
+#include "View.h"
 #include "VirtcamCurl.h"
 
 PCameraView gVirtcamView = NULL;

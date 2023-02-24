@@ -53,26 +53,6 @@
 
 GST_DEBUG_CATEGORY_STATIC(gst_kvs_plugin_debug);
 #define GST_CAT_DEFAULT gst_kvs_plugin_debug
-
-#define GST_TYPE_KVS_PLUGIN_STREAMING_TYPE (gst_kvs_plugin_streaming_type_get_type())
-GType gst_kvs_plugin_streaming_type_get_type(VOID)
-{
-    // Need to use static. Could have used a global as well
-    static GType kvsPluginStreamingType = 0;
-    static GEnumValue enumType[] = {
-        {STREAMING_TYPE_REALTIME, "streaming type realtime", "realtime"},
-        {STREAMING_TYPE_NEAR_REALTIME, "streaming type near realtime", "near-realtime"},
-        {STREAMING_TYPE_OFFLINE, "streaming type offline", "offline"},
-        {0, NULL, NULL},
-    };
-
-    if (kvsPluginStreamingType == 0) {
-        kvsPluginStreamingType = g_enum_register_static("STREAMING_TYPE", enumType);
-    }
-
-    return kvsPluginStreamingType;
-}
-
 #define GST_TYPE_KVS_PLUGIN_WEBRTC_CONNECTION_MODE (gst_kvs_plugin_connection_mode_get_type())
 GType gst_kvs_plugin_connection_mode_get_type(VOID)
 {
@@ -122,6 +102,9 @@ STATUS initKinesisVideoStructs(PGstKvsPlugin pGstPlugin)
 
     // Zero out the kvs sub-structures for proper cleanup later
     MEMSET(&pGstPlugin->kvsContext, 0x00, SIZEOF(KvsContext));
+
+    // Load the CA cert path
+    lookForSslCert(pGstPlugin);
 
     pSessionToken = GETENV(SESSION_TOKEN_ENV_VAR);
     if (0 == STRCMP(pGstPlugin->gstParams.accessKey, DEFAULT_ACCESS_KEY)) { // if no static credential is available in plugin property.
@@ -186,11 +169,6 @@ VOID gst_kvs_plugin_class_init(GstKvsPluginClass* klass)
                                     g_param_spec_string("channel-name", "Channel Name", "Name of the signaling channel", DEFAULT_CHANNEL_NAME,
                                                         (GParamFlags)(G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
 
-    g_object_class_install_property(gobject_class, PROP_STREAMING_TYPE,
-                                    g_param_spec_enum("streaming-type", "Streaming Type", "KVS Producer streaming type",
-                                                      GST_TYPE_KVS_PLUGIN_STREAMING_TYPE,
-                                                      DEFAULT_STREAMING_TYPE, (GParamFlags)(G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
-
     g_object_class_install_property(gobject_class, PROP_WEBRTC_CONNECTION_MODE,
                                     g_param_spec_enum("webrtc-connection-mode", "WebRTC connection mode",
                                                       "WebRTC connection mode - Default, Turn only, P2P only",
@@ -227,11 +205,6 @@ VOID gst_kvs_plugin_class_init(GstKvsPluginClass* klass)
                                     g_param_spec_string("aws-region", "AWS Region", "AWS Region",
                                                         DEFAULT_REGION,
                                                         (GParamFlags)(G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
-
-    g_object_class_install_property(gobject_class, PROP_LOG_LEVEL,
-                                    g_param_spec_uint("log-level", "Logging Level", "Logging Verbosity Level", LOG_LEVEL_VERBOSE,
-                                                      LOG_LEVEL_SILENT + 1, LOG_LEVEL_SILENT + 1,
-                                                      (GParamFlags)(G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
 
     g_object_class_install_property(gobject_class, PROP_FILE_LOG_PATH,
                                     g_param_spec_string("log-path", "Log path",
@@ -280,13 +253,11 @@ VOID gst_kvs_plugin_init(PGstKvsPlugin pGstKvsPlugin)
 
   
     pGstKvsPlugin->gstParams.channelName = g_strdup(DEFAULT_CHANNEL_NAME);
-    pGstKvsPlugin->gstParams.streamingType = DEFAULT_STREAMING_TYPE;
     pGstKvsPlugin->gstParams.disableBufferClipping = DEFAULT_DISABLE_BUFFER_CLIPPING;
     pGstKvsPlugin->gstParams.codecId = g_strdup(DEFAULT_CODEC_ID_H264);
     pGstKvsPlugin->gstParams.accessKey = g_strdup(DEFAULT_ACCESS_KEY);
     pGstKvsPlugin->gstParams.secretKey = g_strdup(DEFAULT_SECRET_KEY);
     pGstKvsPlugin->gstParams.awsRegion = g_strdup(DEFAULT_REGION);
-    pGstKvsPlugin->gstParams.logLevel = DEFAULT_LOG_LEVEL;
     pGstKvsPlugin->gstParams.fileLogPath = g_strdup(DEFAULT_FILE_LOG_PATH);
     pGstKvsPlugin->audioCodecId = g_strdup(DEFAULT_AUDIO_CODEC_ID_AAC);
     pGstKvsPlugin->gstParams.trickleIce = DEFAULT_TRICKLE_ICE_MODE;
@@ -348,9 +319,6 @@ VOID gst_kvs_plugin_set_property(GObject* object, guint propId, const GValue* va
             g_free(pGstKvsPlugin->gstParams.channelName);
             pGstKvsPlugin->gstParams.channelName = g_strdup(g_value_get_string(value));
             break;
-        case PROP_STREAMING_TYPE:
-            pGstKvsPlugin->gstParams.streamingType = (STREAMING_TYPE) g_value_get_enum(value);
-            break;
         case PROP_WEBRTC_CONNECTION_MODE:
             pGstKvsPlugin->gstParams.connectionMode = (WEBRTC_CONNECTION_MODE) g_value_get_enum(value);
             break;
@@ -379,9 +347,6 @@ VOID gst_kvs_plugin_set_property(GObject* object, guint propId, const GValue* va
         case PROP_AWS_REGION:
             g_free(pGstKvsPlugin->gstParams.awsRegion);
             pGstKvsPlugin->gstParams.awsRegion = g_strdup(g_value_get_string(value));
-            break;
-        case PROP_LOG_LEVEL:
-            pGstKvsPlugin->gstParams.logLevel = g_value_get_uint(value);
             break;
         case PROP_FILE_LOG_PATH:
             g_free(pGstKvsPlugin->gstParams.fileLogPath);
@@ -425,9 +390,6 @@ VOID gst_kvs_plugin_get_property(GObject* object, guint propId, GValue* value, G
         case PROP_CHANNEL_NAME:
             g_value_set_string(value, pGstKvsPlugin->gstParams.channelName);
             break;
-        case PROP_STREAMING_TYPE:
-            g_value_set_enum(value, pGstKvsPlugin->gstParams.streamingType);
-            break;
         case PROP_WEBRTC_CONNECTION_MODE:
             g_value_set_enum(value, pGstKvsPlugin->gstParams.connectionMode);
             break;
@@ -451,9 +413,6 @@ VOID gst_kvs_plugin_get_property(GObject* object, guint propId, GValue* value, G
             break;
         case PROP_AWS_REGION:
             g_value_set_string(value, pGstKvsPlugin->gstParams.awsRegion);
-            break;
-        case PROP_LOG_LEVEL:
-            g_value_set_uint(value, pGstKvsPlugin->gstParams.logLevel);
             break;
         case PROP_FILE_LOG_PATH:
             g_value_set_string(value, pGstKvsPlugin->gstParams.fileLogPath);
@@ -700,17 +659,17 @@ GstFlowReturn gst_kvs_plugin_handle_buffer(GstCollectPads* pads, GstCollectData*
             break;
     }
 
-    if (!IS_OFFLINE_STREAMING_MODE(pGstKvsPlugin->gstParams.streamingType)) {
-        if (pGstKvsPlugin->firstPts == GST_CLOCK_TIME_NONE) {
-            pGstKvsPlugin->firstPts = buf->pts;
-        }
-
-        if (pGstKvsPlugin->producerStartTime == GST_CLOCK_TIME_NONE) {
-            pGstKvsPlugin->producerStartTime = GETTIME() * DEFAULT_TIME_UNIT_IN_NANOS;
-        }
-
-        buf->pts += pGstKvsPlugin->producerStartTime - pGstKvsPlugin->firstPts;
+    if (pGstKvsPlugin->firstPts == GST_CLOCK_TIME_NONE) {
+        pGstKvsPlugin->firstPts = buf->pts;
     }
+
+    if (pGstKvsPlugin->startTime == GST_CLOCK_TIME_NONE) {
+        pGstKvsPlugin->startTime = GETTIME() * DEFAULT_TIME_UNIT_IN_NANOS;
+    }
+
+    buf->pts += pGstKvsPlugin->startTime - pGstKvsPlugin->firstPts;
+    buf->pts -= pGstKvsPlugin->firstPts;
+
 
     frame.version = FRAME_CURRENT_VERSION;
     frame.flags = frameFlags;
