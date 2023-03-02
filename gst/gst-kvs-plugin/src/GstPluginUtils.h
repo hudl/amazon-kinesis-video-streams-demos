@@ -17,6 +17,7 @@
 #define DEFAULT_REGION                         "us-east-1"
 #define DEFAULT_FILE_LOG_PATH                  ""
 #define DEFAULT_API_CACHE_PERIOD               (24 * HUNDREDS_OF_NANOS_IN_AN_HOUR)
+#define DEFAULT_LOG_LEVEL                      LOG_LEVEL_WARN
 
 #define CA_CERT_PEM_FILE_EXTENSION ".pem"
 

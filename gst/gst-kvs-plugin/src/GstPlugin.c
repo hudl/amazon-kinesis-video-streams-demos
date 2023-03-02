@@ -125,6 +125,12 @@ STATUS initKinesisVideoStructs(PGstKvsPlugin pGstPlugin)
         pGstPlugin->pRegion = DEFAULT_AWS_REGION;
     }
 
+    if (NULL == GETENV(DEBUG_LOG_LEVEL_ENV_VAR)){
+        char levelStr[20];
+        sprintf(levelStr, "%d", pGstPlugin->gstParams.logLevel);
+        setenv(DEBUG_LOG_LEVEL_ENV_VAR, levelStr, TRUE);
+    }
+    
     if (0 != STRCMP(pGstPlugin->gstParams.fileLogPath, DEFAULT_FILE_LOG_PATH)) {
         CHK_STATUS(
             createFileLogger(FILE_LOGGING_BUFFER_SIZE, MAX_NUMBER_OF_LOG_FILES, (PCHAR) FILE_LOGGER_LOG_FILE_DIRECTORY_PATH, TRUE, TRUE, NULL));
@@ -205,6 +211,11 @@ VOID gst_kvs_plugin_class_init(GstKvsPluginClass* klass)
                                     g_param_spec_string("aws-region", "AWS Region", "AWS Region",
                                                         DEFAULT_REGION,
                                                         (GParamFlags)(G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
+   
+    g_object_class_install_property(gobject_class, PROP_LOG_LEVEL,
+                                    g_param_spec_uint("log-level", "Logging Level", "Logging Verbosity Level", LOG_LEVEL_VERBOSE,
+                                                      LOG_LEVEL_SILENT + 1, LOG_LEVEL_SILENT + 1,
+                                                      (GParamFlags)(G_PARAM_READWRITE | G_PARAM_STATIC_STRINGS)));
 
     g_object_class_install_property(gobject_class, PROP_FILE_LOG_PATH,
                                     g_param_spec_string("log-path", "Log path",
@@ -258,6 +269,7 @@ VOID gst_kvs_plugin_init(PGstKvsPlugin pGstKvsPlugin)
     pGstKvsPlugin->gstParams.accessKey = g_strdup(DEFAULT_ACCESS_KEY);
     pGstKvsPlugin->gstParams.secretKey = g_strdup(DEFAULT_SECRET_KEY);
     pGstKvsPlugin->gstParams.awsRegion = g_strdup(DEFAULT_REGION);
+    pGstKvsPlugin->gstParams.logLevel = DEFAULT_LOG_LEVEL;
     pGstKvsPlugin->gstParams.fileLogPath = g_strdup(DEFAULT_FILE_LOG_PATH);
     pGstKvsPlugin->audioCodecId = g_strdup(DEFAULT_AUDIO_CODEC_ID_AAC);
     pGstKvsPlugin->gstParams.trickleIce = DEFAULT_TRICKLE_ICE_MODE;
@@ -348,6 +360,9 @@ VOID gst_kvs_plugin_set_property(GObject* object, guint propId, const GValue* va
             g_free(pGstKvsPlugin->gstParams.awsRegion);
             pGstKvsPlugin->gstParams.awsRegion = g_strdup(g_value_get_string(value));
             break;
+        case PROP_LOG_LEVEL:
+            pGstKvsPlugin->gstParams.logLevel = g_value_get_uint(value);
+            break;
         case PROP_FILE_LOG_PATH:
             g_free(pGstKvsPlugin->gstParams.fileLogPath);
             pGstKvsPlugin->gstParams.fileLogPath = g_strdup(g_value_get_string(value));
@@ -413,6 +428,9 @@ VOID gst_kvs_plugin_get_property(GObject* object, guint propId, GValue* value, G
             break;
         case PROP_AWS_REGION:
             g_value_set_string(value, pGstKvsPlugin->gstParams.awsRegion);
+            break;
+        case PROP_LOG_LEVEL:
+            g_value_set_uint(value, pGstKvsPlugin->gstParams.logLevel);
             break;
         case PROP_FILE_LOG_PATH:
             g_value_set_string(value, pGstKvsPlugin->gstParams.fileLogPath);
@@ -636,7 +654,6 @@ GstFlowReturn gst_kvs_plugin_handle_buffer(GstCollectPads* pads, GstCollectData*
         goto CleanUp;
     }
 
-    pGstKvsPlugin->lastDts = buf->dts;
     trackId = pTrackData->trackId;
 
     if (!gst_buffer_map(buf, &info, GST_MAP_READ)) {
@@ -668,8 +685,6 @@ GstFlowReturn gst_kvs_plugin_handle_buffer(GstCollectPads* pads, GstCollectData*
     }
 
     buf->pts += pGstKvsPlugin->startTime - pGstKvsPlugin->firstPts;
-    buf->pts -= pGstKvsPlugin->firstPts;
-
 
     frame.version = FRAME_CURRENT_VERSION;
     frame.flags = frameFlags;
@@ -830,6 +845,7 @@ GstStateChangeReturn gst_kvs_plugin_change_state(GstElement* element, GstStateCh
                 ret = GST_STATE_CHANGE_FAILURE;
                 goto CleanUp;
             }
+
             pGstKvsPlugin->firstPts = GST_CLOCK_TIME_NONE;
             pGstKvsPlugin->frameCount = 0;
             

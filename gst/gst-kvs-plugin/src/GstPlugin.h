@@ -56,6 +56,7 @@ typedef enum {
     PROP_ACCESS_KEY,
     PROP_SECRET_KEY,
     PROP_AWS_REGION,
+    PROP_LOG_LEVEL,
     PROP_IOT_CERTIFICATE,
     PROP_DISABLE_BUFFER_CLIPPING,
     PROP_ADAPT_CPD_NALS_TO_AVC,
@@ -256,8 +257,6 @@ struct __GstKvsPlugin {
     PBYTE pAdaptedFrameBuf;
     UINT32 adaptedFrameBufSize;
 
-    UINT64 lastDts;
-    UINT64 basePts;
     UINT64 firstPts;
     UINT64 startTime;
 
