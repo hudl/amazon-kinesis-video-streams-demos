@@ -77,5 +77,6 @@ VOID onSampleStreamingSessionShutdown(UINT64, PWebRtcStreamingSession);
 STATUS sessionServiceHandler(UINT32, UINT64, UINT64);
 STATUS putFrameToWebRtcPeers(PGstKvsPlugin, PFrame, ELEMENTARY_STREAM_NAL_FORMAT);
 STATUS adaptVideoFrameFromAvccToAnnexB(PGstKvsPlugin, PFrame, ELEMENTARY_STREAM_NAL_FORMAT);
+PVOID checkNewRecordingRoutine(PVOID);
 
 #endif //__KVS_WEBRTC_FUNCTIONALITY_H__

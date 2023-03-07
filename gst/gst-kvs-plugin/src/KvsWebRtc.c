@@ -1,8 +1,14 @@
 #define LOG_CLASS "KvsWebRtc"
 #include "GstPlugin.h"
+#include "Keyboard.h"
+#include "View.h"
+#include "VirtcamCurl.h"
+
+PCameraView gVirtcamView = NULL;
 
 STATUS signalingClientStateChangedFn(UINT64 customData, SIGNALING_CLIENT_STATE state)
 {
+    DLOGD("signalingClientStateChangedFn");
     UNUSED_PARAM(customData);
     STATUS retStatus = STATUS_SUCCESS;
     PCHAR pStateStr;
@@ -17,6 +23,7 @@ STATUS signalingClientStateChangedFn(UINT64 customData, SIGNALING_CLIENT_STATE s
 
 STATUS signalingClientErrorFn(UINT64 customData, STATUS status, PCHAR msg, UINT32 msgLen)
 {
+    DLOGD("signalingClientErrorFn");
     PGstKvsPlugin pGstKvsPlugin = (PGstKvsPlugin) customData;
 
     DLOGW("Signaling client generated an error 0x%08x - '%.*s'", status, msgLen, msg);
@@ -36,7 +43,15 @@ VOID onDataChannelMessage(UINT64 customData, PRtcDataChannel pDataChannel, BOOL 
     if (isBinary) {
         DLOGI("DataChannel Binary Message");
     } else {
-        DLOGI("DataChannel String Message: %.*s\n", pMessageLen, pMessage);
+        char keyCode[pMessageLen + 1];
+        memcpy(keyCode, pMessage, pMessageLen);
+        keyCode[pMessageLen] = '\0';
+
+        DLOGI("DataChannel Key Code: %s\n", keyCode);
+
+        if (!moveViewWithKey(keyCode)) {
+            DLOGI("Move remote-control camera failed");
+        }
     }
 }
 
@@ -85,6 +100,13 @@ STATUS signalingClientMessageReceivedFn(UINT64 customData, PReceivedSignalingMes
     PGstKvsPlugin pGstKvsPlugin = (PGstKvsPlugin) customData;
     BOOL peerConnectionFound = FALSE;
     BOOL locked = TRUE;
+    if (IS_VALID_MUTEX_VALUE(pGstKvsPlugin->sessionLock)) {
+        if (!locked)
+        {
+            MUTEX_LOCK(pGstKvsPlugin->sessionLock);
+        }
+        locked = TRUE;
+    }
     UINT32 clientIdHash;
     UINT64 hashValue = 0;
     PPendingMessageQueue pPendingMessageQueue = NULL;
@@ -95,7 +117,6 @@ STATUS signalingClientMessageReceivedFn(UINT64 customData, PReceivedSignalingMes
 
     MUTEX_LOCK(pGstKvsPlugin->sessionLock);
     locked = TRUE;
-
     clientIdHash = COMPUTE_CRC32((PBYTE) pReceivedSignalingMessage->signalingMessage.peerClientId,
                                  (UINT32) STRLEN(pReceivedSignalingMessage->signalingMessage.peerClientId));
     CHK_STATUS(hashTableContains(pGstKvsPlugin->pRtcPeerConnectionForRemoteClient, clientIdHash, &peerConnectionFound));
@@ -133,7 +154,6 @@ STATUS signalingClientMessageReceivedFn(UINT64 customData, PReceivedSignalingMes
             MUTEX_LOCK(pGstKvsPlugin->sessionListReadLock);
             pGstKvsPlugin->streamingSessionList[pGstKvsPlugin->streamingSessionCount++] = pStreamingSession;
             MUTEX_UNLOCK(pGstKvsPlugin->sessionListReadLock);
-
             CHK_STATUS(handleOffer(pGstKvsPlugin, pStreamingSession, &pReceivedSignalingMessage->signalingMessage));
             CHK_STATUS(hashTablePut(pGstKvsPlugin->pRtcPeerConnectionForRemoteClient, clientIdHash, (UINT64) pStreamingSession));
 
@@ -182,11 +202,9 @@ STATUS signalingClientMessageReceivedFn(UINT64 customData, PReceivedSignalingMes
                     CHK_STATUS(createMessageQueue(clientIdHash, &pPendingMessageQueue));
                     CHK_STATUS(stackQueueEnqueue(pGstKvsPlugin->pPendingSignalingMessageForRemoteClient, (UINT64) pPendingMessageQueue));
                 }
-
                 pReceivedSignalingMessageCopy = (PReceivedSignalingMessage) MEMCALLOC(1, SIZEOF(ReceivedSignalingMessage));
 
                 *pReceivedSignalingMessageCopy = *pReceivedSignalingMessage;
-
                 CHK_STATUS(stackQueueEnqueue(pPendingMessageQueue->messageQueue, (UINT64) pReceivedSignalingMessageCopy));
 
                 // NULL the pointers to not free any longer
@@ -220,14 +238,11 @@ CleanUp:
 STATUS initKinesisVideoWebRtc(PGstKvsPlugin pGstPlugin)
 {
     STATUS retStatus = STATUS_SUCCESS;
-
     CHK(pGstPlugin != NULL, STATUS_NULL_ARG);
 
-    DLOGD("Init invoked");
     ATOMIC_STORE_BOOL(&pGstPlugin->terminate, FALSE);
     ATOMIC_STORE_BOOL(&pGstPlugin->recreateSignalingClient, FALSE);
     ATOMIC_STORE_BOOL(&pGstPlugin->signalingConnected, FALSE);
-
     pGstPlugin->sessionLock = MUTEX_CREATE(TRUE);
 
     pGstPlugin->sessionListReadLock = MUTEX_CREATE(FALSE);
@@ -244,10 +259,7 @@ STATUS initKinesisVideoWebRtc(PGstKvsPlugin pGstPlugin)
     pGstPlugin->kvsContext.channelInfo.pRegion = pGstPlugin->pRegion;
     pGstPlugin->kvsContext.channelInfo.version = CHANNEL_INFO_CURRENT_VERSION;
     pGstPlugin->kvsContext.channelInfo.pChannelName = pGstPlugin->gstParams.channelName;
-    pGstPlugin->kvsContext.channelInfo.pKmsKeyId = NULL;
     pGstPlugin->kvsContext.channelInfo.pUserAgentPostfix = KVS_WEBRTC_CLIENT_USER_AGENT_NAME;
-    pGstPlugin->kvsContext.channelInfo.tagCount = pGstPlugin->kvsContext.pStreamInfo->tagCount;
-    pGstPlugin->kvsContext.channelInfo.pTags = pGstPlugin->kvsContext.pStreamInfo->tags;
     pGstPlugin->kvsContext.channelInfo.channelType = SIGNALING_CHANNEL_TYPE_SINGLE_MASTER;
     pGstPlugin->kvsContext.channelInfo.channelRoleType = SIGNALING_CHANNEL_ROLE_TYPE_MASTER;
     pGstPlugin->kvsContext.channelInfo.cachingPolicy = SIGNALING_API_CALL_CACHE_TYPE_FILE;
@@ -265,7 +277,6 @@ STATUS initKinesisVideoWebRtc(PGstKvsPlugin pGstPlugin)
     pGstPlugin->kvsContext.signalingClientCallbacks.customData = (UINT64) pGstPlugin;
 
     pGstPlugin->kvsContext.signalingClientInfo.version = SIGNALING_CLIENT_INFO_CURRENT_VERSION;
-    pGstPlugin->kvsContext.signalingClientInfo.loggingLevel = pGstPlugin->kvsContext.pDeviceInfo->clientInfo.loggerLogLevel;
     STRCPY(pGstPlugin->kvsContext.signalingClientInfo.clientId, DEFAULT_MASTER_CLIENT_ID);
     pGstPlugin->kvsContext.signalingClientInfo.cacheFilePath = NULL; // Use the default path
 
@@ -274,9 +285,7 @@ STATUS initKinesisVideoWebRtc(PGstKvsPlugin pGstPlugin)
                                          &pGstPlugin->pRtcPeerConnectionForRemoteClient));
 
     CHK_STATUS(timerQueueCreate(&pGstPlugin->kvsContext.timerQueueHandle));
-
     CHK_STATUS(stackQueueCreate(&pGstPlugin->pregeneratedCertificates));
-
     CHK_LOG_ERR(retStatus = timerQueueAddTimer(pGstPlugin->kvsContext.timerQueueHandle, GST_PLUGIN_PRE_GENERATE_CERT_START,
                                                GST_PLUGIN_PRE_GENERATE_CERT_PERIOD, pregenerateCertTimerCallback, (UINT64) pGstPlugin,
                                                &pGstPlugin->pregenerateCertTimerId));
@@ -294,10 +303,20 @@ STATUS initKinesisVideoWebRtc(PGstKvsPlugin pGstPlugin)
         CHK_STATUS(signalingClientConnectSync(pGstPlugin->kvsContext.signalingHandle));
     }
 
+    /* Initialize virtcam view and thread */
+    PCameraView pVirtcamView = NULL;
+    curl_global_init(CURL_GLOBAL_ALL);
+    CHK_STATUS(createVirtcamView(&pVirtcamView));
+    if (!ATOMIC_EXCHANGE_BOOL(&pVirtcamView->viewThreadStarted, TRUE)) {
+        THREAD_CREATE(&pVirtcamView->viewTid, checkNewRecordingRoutine, (PVOID) pVirtcamView);
+        printf("[KVS GStreamer Master] Create thread to check for new cameraId\n");
+    }
+
+    gVirtcamView = pVirtcamView;
+
 CleanUp:
 
     CHK_LOG_ERR(retStatus);
-
     return retStatus;
 }
 
@@ -457,6 +476,9 @@ STATUS freeGstKvsWebRtcPlugin(PGstKvsPlugin pGstKvsPlugin)
         pGstKvsPlugin->pregeneratedCertificates = NULL;
     }
 
+    curl_global_cleanup();
+    freeVirtcamView(gVirtcamView);
+    
 CleanUp:
 
     return retStatus;
@@ -465,6 +487,7 @@ CleanUp:
 // Return ICE server stats for a specific streaming session
 STATUS gatherIceServerStats(PWebRtcStreamingSession pStreamingSession)
 {
+    DLOGD("gatherIceServerStats");
     STATUS retStatus = STATUS_SUCCESS;
     RtcStats rtcmetrics;
     UINT32 j;
@@ -603,14 +626,12 @@ STATUS getPendingMessageQueueForHash(PStackQueue pPendingQueue, UINT64 clientHas
     UINT64 data;
 
     CHK(pPendingQueue != NULL && ppPendingMessageQueue != NULL, STATUS_NULL_ARG);
-
     CHK_STATUS(stackQueueGetIterator(pPendingQueue, &iterator));
     while (iterate && IS_VALID_ITERATOR(iterator)) {
         CHK_STATUS(stackQueueIteratorGetItem(iterator, &data));
         CHK_STATUS(stackQueueIteratorNext(&iterator));
 
         pPendingMessageQueue = (PPendingMessageQueue) data;
-
         if (clientHash == pPendingMessageQueue->hashValue) {
             *ppPendingMessageQueue = pPendingMessageQueue;
             iterate = FALSE;
@@ -843,7 +864,6 @@ VOID onIceCandidateHandler(UINT64 customData, PCHAR candidateJson)
     CHK(pStreamingSession != NULL, STATUS_NULL_ARG);
 
     if (candidateJson == NULL) {
-        DLOGD("ice candidate gathering finished");
         ATOMIC_STORE_BOOL(&pStreamingSession->candidateGatheringDone, TRUE);
 
         // if application is master and non-trickle ice, send answer now.
@@ -1467,4 +1487,28 @@ STATUS adaptVideoFrameFromAvccToAnnexB(PGstKvsPlugin pGstKvsPlugin, PFrame pFram
 CleanUp:
 
     return retStatus;
+}
+
+PVOID checkNewRecordingRoutine(PVOID args) {
+    // Request remote-control camera ID from virtcam every kCheckNewRecordingFrequency seconds
+    const int kCheckNewRecordingFrequency = 1;
+    PCameraView pVirtcamView = (PCameraView) args;
+    CURL* curl_handle = virtcamCurlInit();
+
+    while (!ATOMIC_LOAD_BOOL(&pVirtcamView->interrupted)) {
+        int newId = curlGetCameraId(curl_handle);
+        MUTEX_LOCK(pVirtcamView->viewLock);
+        // A changed cameraIdx indicates a new recording
+        if (pVirtcamView->cameraIdx != newId) {
+            DLOGI("Remote control cameraId changed to: %d", pVirtcamView->cameraIdx);
+            pVirtcamView->cameraIdx = newId;
+            setDefaultVirtcamView(pVirtcamView);
+            if (!curlMoveCamera(*pVirtcamView)) {
+                DLOGI("Move remote-control camera failed");
+            }
+        }
+        MUTEX_UNLOCK(pVirtcamView->viewLock);
+        sleep(kCheckNewRecordingFrequency);
+    }
+    curl_easy_cleanup(curl_handle);
 }

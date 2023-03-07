@@ -44,53 +44,26 @@ typedef struct __PendingMessageQueue* PPendingMessageQueue;
 
 #include <gst/gst.h>
 #include <gst/base/gstcollectpads.h>
-#include <com/amazonaws/kinesis/video/cproducer/Include.h>
 #include <com/amazonaws/kinesis/video/webrtcclient/Include.h>
 #include "GstPluginUtils.h"
-#include "KvsProducer.h"
 #include "KvsWebRtc.h"
 
 typedef enum {
     PROP_0,
-    PROP_STREAM_NAME,
     PROP_CHANNEL_NAME,
-    PROP_RETENTION_PERIOD,
-    PROP_STREAMING_TYPE,
     PROP_CONTENT_TYPE,
-    PROP_MAX_LATENCY,
-    PROP_FRAGMENT_DURATION,
-    PROP_TIMECODE_SCALE,
-    PROP_KEY_FRAME_FRAGMENTATION,
-    PROP_FRAME_TIMECODES,
-    PROP_ABSOLUTE_FRAGMENT_TIMES,
-    PROP_FRAGMENT_ACKS,
-    PROP_RESTART_ON_ERROR,
-    PROP_RECALCULATE_METRICS,
-    PROP_FRAMERATE,
-    PROP_AVG_BANDWIDTH_BPS,
-    PROP_BUFFER_DURATION,
-    PROP_REPLAY_DURATION,
-    PROP_CONNECTION_STALENESS,
     PROP_CODEC_ID,
     PROP_ACCESS_KEY,
     PROP_SECRET_KEY,
     PROP_AWS_REGION,
-    PROP_ROTATION_PERIOD,
     PROP_LOG_LEVEL,
-    PROP_STORAGE_SIZE,
-    PROP_CREDENTIAL_FILE_PATH,
     PROP_IOT_CERTIFICATE,
-    PROP_STREAM_TAGS,
-    PROP_FILE_START_TIME,
     PROP_DISABLE_BUFFER_CLIPPING,
-    PROP_STREAM_CREATE_TIMEOUT,
-    PROP_STREAM_STOP_TIMEOUT,
     PROP_ADAPT_CPD_NALS_TO_AVC,
     PROP_ADAPT_FRAME_NALS_TO_AVC,
     PROP_FILE_LOG_PATH,
     PROP_TRICKLE_ICE,
     PROP_WEBRTC_CONNECTION_MODE,
-    PROP_ENABLE_STREAMING,
     PROP_WEBRTC_CONNECT,
 } KVS_GST_PLUGIN_PROPS;
 
@@ -98,9 +71,6 @@ typedef enum {
 #define KVS_ADD_METADATA_NAME          "name"
 #define KVS_ADD_METADATA_VALUE         "value"
 #define KVS_ADD_METADATA_PERSISTENT    "persist"
-
-#define KVS_ENABLE_STREAMING_G_STRUCT_NAME "kvs-enable-streaming"
-#define KVS_ENABLE_STREAMING_FIELD         "enable"
 
 #define KVS_CONNECT_WEBRTC_G_STRUCT_NAME "kvs-connect-webrtc"
 #define KVS_CONNECT_WEBRTC_FIELD         "connect"
@@ -133,7 +103,7 @@ typedef enum {
 
 G_BEGIN_DECLS
 
-#define KVS_GST_VERSION AWS_SDK_KVS_PRODUCER_VERSION_STRING
+// #define KVS_GST_VERSION AWS_SDK_KVS_PRODUCER_VERSION_STRING
 
 #define GST_TYPE_KVS_PLUGIN            (gst_kvs_plugin_get_type())
 #define GST_KVS_PLUGIN(obj)            (G_TYPE_CHECK_INSTANCE_CAST((obj), GST_TYPE_KVS_PLUGIN, GstKvsPlugin))
@@ -158,13 +128,7 @@ typedef STATUS (*freeCredentialProviderFunc)(PAwsCredentialProvider*);
 
 typedef struct __KvsContext KvsContext;
 struct __KvsContext {
-    PDeviceInfo pDeviceInfo;
-    PStreamInfo pStreamInfo;
     PAwsCredentialProvider pCredentialProvider;
-    PClientCallbacks pClientCallbacks;
-    PStreamCallbacks pStreamCallbacks;
-    CLIENT_HANDLE clientHandle;
-    STREAM_HANDLE streamHandle;
     TIMER_QUEUE_HANDLE timerQueueHandle;
     SIGNALING_CLIENT_HANDLE signalingHandle;
     freeCredentialProviderFunc freeCredentialProviderFn;
@@ -176,48 +140,22 @@ typedef struct __KvsContext* PKvsContext;
 
 typedef struct __GstParams GstParams;
 struct __GstParams {
-    gchar* streamName;
     gchar* channelName;
-    guint retentionPeriodInHours;
-    gchar* kmsKeyId;
-    STREAMING_TYPE streamingType;
     gchar* contentType;
     gchar* audioContentType;
     gchar* videoContentType;
-    guint maxLatencyInSeconds;
-    guint fragmentDurationInMillis;
-    guint timeCodeScaleInMillis;
-    gboolean keyFrameFragmentation;
-    gboolean frameTimecodes;
-    gboolean absoluteFragmentTimecodes;
-    gboolean fragmentAcks;
-    gboolean restartOnErrors;
-    gboolean recalculateMetrics;
     gboolean disableBufferClipping;
-    guint frameRate;
-    guint avgBandwidthBps;
-    guint bufferDurationInSeconds;
-    guint replayDurationInSeconds;
-    guint connectionStalenessInSeconds;
     gchar* codecId;
     gchar* accessKey;
     gchar* secretKey;
     gchar* awsRegion;
-    guint rotationPeriodInSeconds;
     guint logLevel;
     gchar* fileLogPath;
-    guint storageSizeInBytes;
-    gchar* credentialFilePath;
     GstStructure* iotCertificate;
-    GstStructure* streamTags;
-    guint64 fileStartTime;
-    guint streamCreateTimeoutInSeconds;
-    guint streamStopTimeoutInSeconds;
     gboolean adaptCpdNals;
     gboolean adaptFrameNals;
     gboolean trickleIce;
     WEBRTC_CONNECTION_MODE connectionMode;
-    gboolean enableStreaming;
     gboolean webRtcConnect;
 };
 typedef struct __GstParams* PGstParams;
@@ -284,8 +222,6 @@ struct __GstKvsPlugin {
     volatile ATOMIC_BOOL terminate;
     volatile ATOMIC_BOOL recreateSignalingClient;
     volatile ATOMIC_BOOL signalingConnected;
-    volatile ATOMIC_BOOL streamStopped;
-    volatile ATOMIC_BOOL enableStreaming;
     volatile ATOMIC_BOOL connectWebRtc;
 
     CHAR caCertPath[MAX_PATH_LEN + 1];
@@ -321,17 +257,13 @@ struct __GstKvsPlugin {
     PBYTE pAdaptedFrameBuf;
     UINT32 adaptedFrameBufSize;
 
-    UINT64 lastDts;
-    UINT64 basePts;
     UINT64 firstPts;
-    UINT64 producerStartTime;
+    UINT64 startTime;
 
     gchar* audioCodecId;
     guint numStreams;
     guint numAudioStreams;
     guint numVideoStreams;
-
-    STATUS streamStatus;
 
     ELEMENTARY_STREAM_NAL_FORMAT detectedCpdFormat;
 
