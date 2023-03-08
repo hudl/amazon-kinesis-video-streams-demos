@@ -737,16 +737,22 @@ STATUS createWebRtcStreamingSession(PGstKvsPlugin pGstKvsPlugin, PCHAR peerId, B
         transceiverOnBandwidthEstimation(pStreamingSession->pVideoRtcRtpTransceiver, (UINT64) pStreamingSession, sampleBandwidthEstimationHandler));
 
     // Set up audio transceiver codec id according to type of encoding used
-    if (STRNCMP(pGstKvsPlugin->gstParams.audioContentType, AUDIO_MULAW_CONTENT_TYPE, MAX_GSTREAMER_MEDIA_TYPE_LEN) == 0) {
-        audioTrack.codec = RTC_CODEC_MULAW;
-    } else if (STRNCMP(pGstKvsPlugin->gstParams.audioContentType, AUDIO_ALAW_CONTENT_TYPE, MAX_GSTREAMER_MEDIA_TYPE_LEN) == 0) {
-        audioTrack.codec = RTC_CODEC_ALAW;
-    } else if (STRNCMP(pGstKvsPlugin->gstParams.audioContentType, AUDIO_OPUS_CONTENT_TYPE, MAX_GSTREAMER_MEDIA_TYPE_LEN) == 0) {
-        audioTrack.codec = RTC_CODEC_OPUS;
+    if (pGstKvsPlugin->gstParams.audioContentType) {
+        if (STRNCMP(pGstKvsPlugin->gstParams.audioContentType, AUDIO_MULAW_CONTENT_TYPE, MAX_GSTREAMER_MEDIA_TYPE_LEN) == 0) {
+            audioTrack.codec = RTC_CODEC_MULAW;
+        } else if (STRNCMP(pGstKvsPlugin->gstParams.audioContentType, AUDIO_ALAW_CONTENT_TYPE, MAX_GSTREAMER_MEDIA_TYPE_LEN) == 0) {
+            audioTrack.codec = RTC_CODEC_ALAW;
+        } else if (STRNCMP(pGstKvsPlugin->gstParams.audioContentType, AUDIO_OPUS_CONTENT_TYPE, MAX_GSTREAMER_MEDIA_TYPE_LEN) == 0) {
+            audioTrack.codec = RTC_CODEC_OPUS;
+        } else {
+            DLOGE("Error, audio content type %s not accepted by plugin", pGstKvsPlugin->gstParams.audioContentType);
+            CHK(FALSE, STATUS_INVALID_ARG);
+        }
     } else {
-        DLOGE("Error, audio content type %s not accepted by plugin", pGstKvsPlugin->gstParams.audioContentType);
-        CHK(FALSE, STATUS_INVALID_ARG);
+        // As a placeholder
+        audioTrack.codec = RTC_CODEC_MULAW;
     }
+    
     // Add a SendRecv Transceiver of type video
     audioTrack.kind = MEDIA_STREAM_TRACK_KIND_AUDIO;
     STRCPY(audioTrack.streamId, "myKvsVideoStream");
